@@ -413,7 +413,7 @@ impl View {
     ) -> Result<(), Error> {
         if opt.json {
             self.term_info.use_pager = false;
-            self.display_json()?;
+            self.display_json(opt.pretty)?;
             return Ok(());
         }
 
@@ -599,30 +599,26 @@ impl View {
         Ok(())
     }
 
-    fn display_json(&self) -> Result<(), Error> {
-        self.term_info.write_line("[")?;
-
-        let len_pid = self.visible_pids.len();
-        for (i, pid) in self.visible_pids.iter().enumerate() {
-            let mut line = "{".to_string();
-            let len_column = self.columns.len();
-            for (j, c) in self.columns.iter().enumerate() {
-                if c.visible && c.kind != ConfigColumnKind::Separator {
-                    let text = c.column.display_json(*pid);
-                    line.push_str(&text);
-                    if j != len_column - 1 {
-                        line.push_str(", ");
+    fn json_rows(&self) -> Vec<serde_json::Value> {
+        self.visible_pids
+            .iter()
+            .map(|pid| {
+                let mut row = serde_json::Map::new();
+                for c in &self.columns {
+                    if c.visible && c.kind != ConfigColumnKind::Separator {
+                        if let Some((key, value)) = c.column.display_json(*pid) {
+                            row.insert(key, value);
+                        }
                     }
                 }
-            }
-            line.push('}');
-            if i != len_pid - 1 {
-                line.push(',');
-            }
-            self.term_info.write_line(&line)?;
-        }
+                serde_json::Value::Object(row)
+            })
+            .collect()
+    }
 
-        self.term_info.write_line("]")?;
+    fn display_json(&self, pretty: bool) -> Result<(), Error> {
+        let output = serialize_json_rows(&self.json_rows(), pretty)?;
+        self.term_info.write_line(&output)?;
         Ok(())
     }
 
@@ -712,7 +708,9 @@ impl View {
 
     fn search_regex(pid: i32, cols: &[&dyn Column], regex: &SearchRegex) -> Result<bool, Error> {
         for c in cols {
-            if regex.is_match(&c.display_json(pid))? {
+            if let Some(content) = c.search_content(pid)
+                && regex.is_match(&content)?
+            {
                 return Ok(true);
             }
         }
@@ -773,5 +771,50 @@ impl View {
             }
         }
         current
+    }
+}
+
+fn serialize_json_rows(rows: &[serde_json::Value], pretty: bool) -> Result<String, Error> {
+    if pretty {
+        return Ok(serde_json::to_string_pretty(rows)?);
+    }
+
+    let mut output = String::from("[\n");
+    for (i, row) in rows.iter().enumerate() {
+        output.push_str(&serde_json::to_string(row)?);
+        if i + 1 != rows.len() {
+            output.push(',');
+        }
+        output.push('\n');
+    }
+    output.push(']');
+    Ok(output)
+}
+
+#[cfg(test)]
+mod json_tests {
+    use super::serialize_json_rows;
+    use serde_json::json;
+
+    #[test]
+    fn json_rows_are_valid_and_preserve_control_characters() {
+        let rows = vec![json!({
+            "Command": "line one\nline two\t\"quoted\"\\path",
+            "CPU": 12.5
+        })];
+
+        let output = serialize_json_rows(&rows, false).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(parsed, serde_json::Value::Array(rows));
+    }
+
+    #[test]
+    fn pretty_json_is_multiline_and_valid() {
+        let rows = vec![json!({"PID": 42, "Command": "procs"})];
+
+        let output = serialize_json_rows(&rows, true).unwrap();
+        assert!(output.contains("\n  {\n"));
+        let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(parsed, serde_json::Value::Array(rows));
     }
 }

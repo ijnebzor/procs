@@ -3,7 +3,7 @@ use crate::config::*;
 use crate::query::WhereFilter;
 use crate::search_regex::SearchRegex;
 use crate::term_info::TermInfo;
-use crate::util::{get_theme, has_regex_syntax};
+use crate::util::{get_theme, has_regex_syntax, wrap};
 use crate::view::View;
 use anyhow::Error;
 use chrono::offset::Local;
@@ -18,6 +18,10 @@ const KEY_ENTER_CR: u8 = 13;
 const KEY_ESC: u8 = 27;
 const KEY_BACKSPACE: u8 = 8;
 const KEY_DELETE: u8 = 127;
+
+fn physical_line_count(text: &str, terminal_width: usize) -> usize {
+    wrap(text, terminal_width.max(1)).len()
+}
 
 enum Command {
     Wake,
@@ -82,10 +86,10 @@ impl Watcher {
                 Local::now().format("%Y/%m/%d %H:%M:%S"),
             )
         };
-        let result = header.len();
+        let mut lines = physical_line_count(&header, term_info.width);
         term_info.write_line(&format!(
             "{}",
-            console::style(header).white().bold().underlined()
+            console::style(header.as_str()).white().bold().underlined()
         ))?;
 
         if opt.regex || opt.smart {
@@ -98,20 +102,17 @@ impl Watcher {
                     current
                 )
             };
+            lines += physical_line_count(&active, term_info.width);
             term_info.write_line(&active)?;
             if let Some(err) = regex_error {
-                term_info.write_line(&format!(" Regex error: {err}"))?;
+                let error = format!(" Regex error: {err}");
+                lines += physical_line_count(&error, term_info.width);
+                term_info.write_line(&error)?;
             }
         }
 
         term_info.write_line("")?;
-        let mut lines = result.div_ceil(term_info.width) + 1;
-        if opt.regex || opt.smart {
-            lines += 1;
-            if regex_error.is_some() {
-                lines += 1;
-            }
-        }
+        lines += 1;
         Ok(lines)
     }
 
@@ -165,6 +166,8 @@ impl Watcher {
             )?;
 
             view.filter(opt, config, header_lines, where_filter.as_ref())?;
+            view.adjust(config, &min_widths);
+            view.fit_to_watch_height(opt, config, header_lines);
             view.adjust(config, &min_widths);
             for (i, c) in view.columns.iter().enumerate() {
                 min_widths.insert(i, c.column.get_width());
@@ -269,5 +272,26 @@ impl Watcher {
             prev_term_height = view.term_info.height;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::physical_line_count;
+
+    #[test]
+    fn physical_lines_use_unicode_display_width() {
+        assert_eq!(physical_line_count("ab界", 4), 1);
+        assert_eq!(physical_line_count("ab界x", 4), 2);
+    }
+
+    #[test]
+    fn physical_lines_handle_combining_characters() {
+        assert_eq!(physical_line_count("e\u{301}x", 1), 2);
+    }
+
+    #[test]
+    fn physical_lines_are_safe_at_zero_width() {
+        assert_eq!(physical_line_count("abc", 0), 3);
     }
 }

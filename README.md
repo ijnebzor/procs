@@ -287,6 +287,7 @@ procs --format jsonl --where '.pid > 1000'
 If `--watch` or `--watch-interval <second>` option is used, procs automatically updates output like `top`.
 If `--watch` is used, the update interval becomes 1s.
 The update interval can be specified by the argument of `--watch-interval`.
+Long command values wrap beneath the `Command` column instead of being cut at the terminal edge. Wrapped rows consume additional screen lines, so a narrow terminal may show fewer processes. A configured `max_width` still limits that column before wrapping.
 There are some keyboard shortcuts to control.
 
 - `n`: Change the sort column to the next column

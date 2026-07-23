@@ -268,10 +268,9 @@ procs --format jsonl | jq 'select(.user == "root")'
 
 JSONL is intended for streaming pipelines and cannot be combined with `--pretty` or watch mode.
 
-### jq-compatible filtering
+### Built-in jq-compatible queries
 
-Use `--where` to filter canonical process records without installing or launching external `jq`.
-The expression is compiled once and works with table, watch, JSON, and JSONL output.
+Use `--where` to filter individual canonical process records while retaining table, watch, JSON, or JSONL output. The expression is compiled once and a record is kept when it produces any value other than `false` or `null`.
 
 ```console
 procs --where '.usage_cpu > 10'
@@ -280,7 +279,19 @@ procs --watch --where '.command | contains("server")'
 procs --format jsonl --where '.pid > 1000'
 ```
 
-`--where` currently exposes canonical fields for the configured columns. Missing fields follow jq semantics and evaluate as `null`.
+Use `--jq` to transform the complete canonical process array. It implies canonical JSON output and, like jq, may emit zero, one, or multiple JSON values.
+
+```console
+procs --jq 'sort_by(.usage_cpu) | reverse | .[:5]'
+procs --jq 'map({pid, command, cpu: .usage_cpu})'
+procs --jq '.[] | select(.user == "root")'
+procs --where '.pid > 1000' --jq 'map(.command)'
+procs --jq '.[:1] | .[] | {pid, command}' --pretty
+```
+
+`--jq` can be combined with `--where`, search, sorting, and `--format json`. It cannot be combined with legacy `--json`, table or JSONL formats, or watch mode. An invalid or failing expression writes a diagnostic and exits with status 1.
+
+Both options expose canonical fields for the configured columns. Missing fields follow jq semantics and evaluate as `null`.
 
 ### Watch mode
 

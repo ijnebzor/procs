@@ -178,7 +178,7 @@ impl Watcher {
                 min_widths.insert(i, c.column.get_width());
             }
 
-            view.display(opt, config, &theme)?;
+            view.display(opt, config, &theme, None)?;
 
             view.term_info.clear_rest_lines()?;
             view.term_info.move_cursor_to(0, 0)?;

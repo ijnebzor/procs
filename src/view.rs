@@ -4,6 +4,7 @@ use crate::columns::*;
 use crate::config::*;
 use crate::opt::{ArgColorMode, ArgOutputFormat, ArgPagerMode};
 use crate::process::collect_proc;
+use crate::query::JqTransform;
 use crate::query::WhereFilter;
 use crate::search_regex::SearchRegex;
 use crate::style::{apply_color, apply_style, color_to_column_style};
@@ -498,8 +499,11 @@ impl View {
         opt: &Opt,
         config: &Config,
         theme: &ConfigTheme,
+        jq_transform: Option<&JqTransform>,
     ) -> Result<(), Error> {
-        let json_mode = if opt.json {
+        let json_mode = if jq_transform.is_some() {
+            Some(JsonMode::CanonicalArray)
+        } else if opt.json {
             Some(JsonMode::LegacyArray)
         } else {
             match opt.output_format {
@@ -511,7 +515,7 @@ impl View {
 
         if let Some(mode) = json_mode {
             self.term_info.use_pager = false;
-            self.display_json(mode, opt.pretty)?;
+            self.display_json(mode, opt.pretty, jq_transform)?;
             return Ok(());
         }
 
@@ -813,9 +817,23 @@ impl View {
             .collect()
     }
 
-    fn display_json(&self, mode: JsonMode, pretty: bool) -> Result<(), Error> {
-        let canonical = mode != JsonMode::LegacyArray;
+    fn display_json(
+        &self,
+        mode: JsonMode,
+        pretty: bool,
+        jq_transform: Option<&JqTransform>,
+    ) -> Result<(), Error> {
+        let canonical = jq_transform.is_some() || mode != JsonMode::LegacyArray;
         let rows = self.json_rows(canonical);
+        if let Some(transform) = jq_transform {
+            let input = serde_json::Value::Array(rows);
+            let outputs = transform.transform(&input)?;
+            for output in serialize_json_values(&outputs, pretty)? {
+                self.term_info.write_line(&output)?;
+            }
+            return Ok(());
+        }
+
         match mode {
             JsonMode::LegacyArray | JsonMode::CanonicalArray => {
                 let output = serialize_json_rows(&rows, pretty)?;
@@ -1057,6 +1075,21 @@ fn serialize_json_rows(rows: &[serde_json::Value], pretty: bool) -> Result<Strin
     Ok(output)
 }
 
+fn serialize_json_value(value: &serde_json::Value, pretty: bool) -> Result<String, Error> {
+    if pretty {
+        Ok(serde_json::to_string_pretty(value)?)
+    } else {
+        Ok(serde_json::to_string(value)?)
+    }
+}
+
+fn serialize_json_values(values: &[serde_json::Value], pretty: bool) -> Result<Vec<String>, Error> {
+    values
+        .iter()
+        .map(|value| serialize_json_value(value, pretty))
+        .collect()
+}
+
 fn watch_content_height(
     terminal_height: usize,
     watch_header_lines: usize,
@@ -1072,7 +1105,7 @@ fn watch_content_height(
 
 #[cfg(test)]
 mod json_tests {
-    use super::{serialize_json_rows, to_snake_case, watch_content_height};
+    use super::{serialize_json_rows, serialize_json_values, to_snake_case, watch_content_height};
     use serde_json::json;
 
     #[test]
@@ -1095,6 +1128,22 @@ mod json_tests {
         assert!(output.contains("\n  {\n"));
         let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
         assert_eq!(parsed, serde_json::Value::Array(rows));
+    }
+
+    #[test]
+    fn transformed_values_preserve_output_cardinality() {
+        let values = vec![json!({"pid": 1}), json!(null), json!("done")];
+        assert_eq!(
+            serialize_json_values(&values, false).unwrap(),
+            ["{\"pid\":1}", "null", "\"done\""]
+        );
+        assert!(serialize_json_values(&[], false).unwrap().is_empty());
+    }
+
+    #[test]
+    fn transformed_values_can_be_pretty_printed() {
+        let output = serialize_json_values(&[json!({"pid": 1})], true).unwrap();
+        assert_eq!(output, ["{\n  \"pid\": 1\n}"]);
     }
 
     #[test]

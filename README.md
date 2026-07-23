@@ -268,6 +268,20 @@ procs --format jsonl | jq 'select(.user == "root")'
 
 JSONL is intended for streaming pipelines and cannot be combined with `--pretty` or watch mode.
 
+### jq-compatible filtering
+
+Use `--where` to filter canonical process records without installing or launching external `jq`.
+The expression is compiled once and works with table, watch, JSON, and JSONL output.
+
+```console
+procs --where '.usage_cpu > 10'
+procs --where '.user == "root" and .usage_mem > 1'
+procs --watch --where '.command | contains("server")'
+procs --format jsonl --where '.pid > 1000'
+```
+
+`--where` currently exposes canonical fields for the configured columns. Missing fields follow jq semantics and evaluate as `null`.
+
 ### Watch mode
 
 If `--watch` or `--watch-interval <second>` option is used, procs automatically updates output like `top`.

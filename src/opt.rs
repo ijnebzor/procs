@@ -72,6 +72,10 @@ pub struct Opt {
     #[clap(long = "smart", conflicts_with_all(&["text", "regex"]))]
     pub smart: bool,
 
+    /// Filter canonical process records with a jq-compatible expression
+    #[clap(long = "where", value_name = "expr")]
+    pub where_expr: Option<String>,
+
     /// AND  logic for multi-keyword
     #[clap(
         short = 'a',

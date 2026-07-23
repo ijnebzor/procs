@@ -3,6 +3,7 @@ mod columns;
 mod config;
 mod opt;
 mod process;
+mod query;
 mod search_regex;
 mod style;
 mod term_info;
@@ -14,6 +15,7 @@ use crate::column::Column;
 use crate::columns::*;
 use crate::config::*;
 use crate::opt::*;
+use crate::query::WhereFilter;
 use crate::util::{adjust, get_theme, has_regex_syntax, lap};
 use crate::view::View;
 use crate::watcher::Watcher;
@@ -212,6 +214,11 @@ fn run_watch(opt: &mut Opt, config: &Config, interval: u64) -> Result<(), Error>
 fn run_default(opt: &mut Opt, config: &Config) -> Result<(), Error> {
     let mut time = Instant::now();
 
+    let where_filter = opt
+        .where_expr
+        .as_deref()
+        .map(WhereFilter::compile)
+        .transpose()?;
     let theme = get_theme(opt, config);
 
     let mut view = View::new(opt, config, false)?;
@@ -220,7 +227,7 @@ fn run_default(opt: &mut Opt, config: &Config) -> Result<(), Error> {
         lap(&mut time, "Info: View::new");
     }
 
-    view.filter(opt, config, 1)?;
+    view.filter(opt, config, 1, where_filter.as_ref())?;
 
     if opt.debug {
         lap(&mut time, "Info: view.filter");

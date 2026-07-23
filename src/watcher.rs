@@ -1,5 +1,6 @@
 use crate::Opt;
 use crate::config::*;
+use crate::query::WhereFilter;
 use crate::search_regex::SearchRegex;
 use crate::term_info::TermInfo;
 use crate::util::{get_theme, has_regex_syntax};
@@ -117,6 +118,12 @@ impl Watcher {
     pub fn start(opt: &mut Opt, config: &Config, interval: u64) -> Result<(), Error> {
         let theme = get_theme(opt, config);
 
+        let where_filter = opt
+            .where_expr
+            .as_deref()
+            .map(WhereFilter::compile)
+            .transpose()?;
+
         let (tx_cmd, rx_cmd) = channel();
         Watcher::spawn_cmd(tx_cmd.clone());
 
@@ -157,7 +164,7 @@ impl Watcher {
                 &regex_error,
             )?;
 
-            view.filter(opt, config, header_lines)?;
+            view.filter(opt, config, header_lines, where_filter.as_ref())?;
             view.adjust(config, &min_widths);
             for (i, c) in view.columns.iter().enumerate() {
                 min_widths.insert(i, c.column.get_width());

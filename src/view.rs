@@ -424,24 +424,41 @@ impl View {
         }
     }
 
-    pub fn fit_to_watch_height(&mut self, opt: &Opt, config: &Config, header_lines: usize) {
+    pub fn fit_to_watch_height(
+        &mut self,
+        opt: &Opt,
+        config: &Config,
+        header_lines: usize,
+        min_widths: &HashMap<usize, usize>,
+    ) {
         let available_rows = watch_content_height(
             self.term_info.height,
             header_lines,
             !opt.no_header && config.display.show_header,
             !opt.no_header && config.display.show_footer,
         );
+        let candidate_pids = self.visible_pids.clone();
         if available_rows == 0 {
             self.visible_pids.clear();
+            self.adjust(config, min_widths);
             return;
         }
 
-        let Some((command_idx, command_width)) = self.flexible_command_layout() else {
-            return;
-        };
+        let visible_count =
+            largest_fitting_prefix_descending(candidate_pids.len(), available_rows, |count| {
+                self.visible_pids = candidate_pids[..count].to_vec();
+                self.adjust(config, min_widths);
+                self.wrapped_content_height()
+            });
+        self.visible_pids = candidate_pids[..visible_count].to_vec();
+        self.adjust(config, min_widths);
+    }
 
-        let row_heights = self
-            .visible_pids
+    fn wrapped_content_height(&self) -> usize {
+        let Some((command_idx, command_width)) = self.flexible_command_layout() else {
+            return self.visible_pids.len();
+        };
+        self.visible_pids
             .iter()
             .map(|pid| {
                 let command = self.columns[command_idx]
@@ -450,9 +467,7 @@ impl View {
                     .unwrap_or_default();
                 wrap(command.trim_end(), command_width).len()
             })
-            .collect::<Vec<_>>();
-        self.visible_pids
-            .truncate(visible_process_count(&row_heights, available_rows));
+            .sum()
     }
 
     fn flexible_command_layout(&self) -> Option<(usize, usize)> {
@@ -468,7 +483,13 @@ impl View {
             .map(|(_, c)| c.column.get_width() + 1)
             .sum::<usize>()
             + 1;
-        let command_width = self.term_info.width.saturating_sub(fixed_width);
+        let remaining_width = self.term_info.width.saturating_sub(fixed_width);
+        let command = &self.columns[command_idx];
+        let command_width = flexible_column_width(
+            remaining_width,
+            command.column.get_width(),
+            command.max_width,
+        );
         (command_width > 0).then_some((command_idx, command_width))
     }
 
@@ -961,15 +982,32 @@ impl View {
     }
 }
 
-fn visible_process_count(row_heights: &[usize], available_rows: usize) -> usize {
-    let mut used_rows = 0;
-    for (index, row_height) in row_heights.iter().enumerate() {
-        if used_rows + row_height > available_rows {
-            return index;
+fn largest_fitting_prefix_descending<F>(
+    candidate_count: usize,
+    available_rows: usize,
+    mut height: F,
+) -> usize
+where
+    F: FnMut(usize) -> usize,
+{
+    for candidate in (0..=candidate_count).rev() {
+        if height(candidate) <= available_rows {
+            return candidate;
         }
-        used_rows += row_height;
     }
-    row_heights.len()
+    0
+}
+
+fn flexible_column_width(
+    remaining_width: usize,
+    measured_width: usize,
+    max_width: Option<usize>,
+) -> usize {
+    if max_width.is_some() {
+        remaining_width.min(measured_width)
+    } else {
+        remaining_width
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -1082,16 +1120,50 @@ mod json_tests {
 
 #[cfg(test)]
 mod watch_layout_tests {
-    use super::visible_process_count;
+    use super::{flexible_column_width, largest_fitting_prefix_descending};
+    use std::cell::RefCell;
 
     #[test]
-    fn physical_row_budget_keeps_the_leading_processes_that_fit() {
-        assert_eq!(visible_process_count(&[1, 2, 1], 3), 2);
-        assert_eq!(visible_process_count(&[1, 2, 1], 4), 3);
+    fn fitting_recomputes_layout_for_each_candidate_prefix() {
+        let heights = [0, 1, 3, 6];
+        assert_eq!(
+            largest_fitting_prefix_descending(3, 3, |count| heights[count]),
+            2
+        );
+        assert_eq!(
+            largest_fitting_prefix_descending(3, 6, |count| heights[count]),
+            3
+        );
     }
 
     #[test]
-    fn physical_row_budget_does_not_skip_an_oversized_leading_process() {
-        assert_eq!(visible_process_count(&[4, 1], 3), 0);
+    fn fitting_can_refill_after_discarded_rows_stop_widening_fixed_columns() {
+        let height_after_relayout = [0, 1, 2, 7];
+        assert_eq!(
+            largest_fitting_prefix_descending(3, 3, |count| height_after_relayout[count]),
+            2
+        );
+    }
+
+    #[test]
+    fn fitting_only_probes_smaller_prefixes_for_stateful_columns() {
+        let probes = RefCell::new(Vec::new());
+        let selected = largest_fitting_prefix_descending(4, 2, |count| {
+            probes.borrow_mut().push(count);
+            count
+        });
+        assert_eq!(selected, 2);
+        assert_eq!(*probes.borrow(), [4, 3, 2]);
+    }
+
+    #[test]
+    fn configured_command_max_width_keeps_following_columns_aligned() {
+        assert_eq!(flexible_column_width(80, 10, Some(10)), 10);
+        assert_eq!(flexible_column_width(8, 10, Some(10)), 8);
+    }
+
+    #[test]
+    fn unbounded_command_uses_all_remaining_terminal_width() {
+        assert_eq!(flexible_column_width(80, 10, None), 80);
     }
 }

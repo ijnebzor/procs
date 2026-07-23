@@ -23,6 +23,10 @@ fn physical_line_count(text: &str, terminal_width: usize) -> usize {
     wrap(text, terminal_width.max(1)).len()
 }
 
+fn terminal_width_changed(previous: usize, current: usize) -> bool {
+    previous != current
+}
+
 enum Command {
     Wake,
     Sleep,
@@ -151,10 +155,13 @@ impl Watcher {
                 view.sort_info.order = sort_order.clone().unwrap_or(view.sort_info.order);
             }
 
-            let resized = prev_term_width != view.term_info.width
-                || prev_term_height != view.term_info.height;
+            let width_changed = terminal_width_changed(prev_term_width, view.term_info.width);
+            let resized = width_changed || prev_term_height != view.term_info.height;
             if resized {
                 term_info.clear_screen()?;
+            }
+            if width_changed {
+                min_widths.clear();
             }
             let header_lines = Watcher::display_header(
                 &view.term_info,
@@ -166,9 +173,7 @@ impl Watcher {
             )?;
 
             view.filter(opt, config, header_lines, where_filter.as_ref())?;
-            view.adjust(config, &min_widths);
-            view.fit_to_watch_height(opt, config, header_lines);
-            view.adjust(config, &min_widths);
+            view.fit_to_watch_height(opt, config, header_lines, &min_widths);
             for (i, c) in view.columns.iter().enumerate() {
                 min_widths.insert(i, c.column.get_width());
             }
@@ -277,7 +282,7 @@ impl Watcher {
 
 #[cfg(test)]
 mod tests {
-    use super::physical_line_count;
+    use super::{physical_line_count, terminal_width_changed};
 
     #[test]
     fn physical_lines_use_unicode_display_width() {
@@ -293,5 +298,12 @@ mod tests {
     #[test]
     fn physical_lines_are_safe_at_zero_width() {
         assert_eq!(physical_line_count("abc", 0), 3);
+    }
+
+    #[test]
+    fn width_cache_is_reset_when_terminal_width_changes() {
+        assert!(terminal_width_changed(120, 80));
+        assert!(terminal_width_changed(80, 120));
+        assert!(!terminal_width_changed(80, 80));
     }
 }

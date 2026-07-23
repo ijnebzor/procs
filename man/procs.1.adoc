@@ -24,11 +24,22 @@ procs - a replacement for `ps` written in Rust
 *--nor*:: Hide processes that match any keyword.
 *--watch*:: Enable watch mode for real-time updates.
 *--watch-interval <second>*:: Set the update interval for watch mode.
+*--where <expr>*:: Filter individual canonical process records with a jq-compatible expression.
+*--jq <filter>*:: Transform the complete canonical result after `--where` filtering. This implies JSON output and cannot be combined with watch mode, JSONL, table output, or legacy `--json`.
+*--format <format>*:: Select `table`, canonical `json`, or canonical `jsonl` output.
+*--json*:: Emit the legacy display-keyed JSON array.
+*--pretty*:: Pretty-print JSON or each `--jq` output value.
 *--tree*:: Display processes in a tree view.
 *--sorta <column>*:: Sort processes in ascending order by the specified column.
 *--sortd <column>*:: Sort processes in descending order by the specified column.
 *--insert <column>*:: Insert a new column at the position of `Slot` or `MultiSlot`.
 *--gen-completion*:: Generate shell completion files for supported shells.
+
+== JQ-COMPATIBLE QUERIES
+
+`--where` runs once for each canonical process record. `--jq` runs once on the complete canonical JSON array after filtering. A `--jq` filter may emit zero, one, or multiple values. Zero values produce no output; multiple values are emitted in evaluation order as newline-separated complete JSON values, without an enclosing array.
+
+Query syntax and runtime failures exit with status 1 and print a diagnostic. Query-engine extension values that cannot be represented as JSON are reported as errors rather than emitted as invalid JSON. Incompatible `--jq` output modes also exit with status 1.
 
 == EXAMPLES
 
@@ -37,6 +48,10 @@ procs - a replacement for `ps` written in Rust
 *Search by non-numeric keyword*:: procs zsh
 
 *Search by numeric keyword*:: procs --or 6000 60000 60001 16723
+
+*Filter canonical records*:: procs --where '.usage_cpu > 10'
+
+*Transform the complete result*:: procs --jq '{count: length, pids: map(.pid)}'
 
 *Show Docker container name*:: procs growi
 

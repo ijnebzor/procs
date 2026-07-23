@@ -76,6 +76,10 @@ pub struct Opt {
     #[clap(long = "where", value_name = "expr")]
     pub where_expr: Option<String>,
 
+    /// Transform the complete canonical result with a jq-compatible filter (implies JSON)
+    #[clap(long = "jq", value_name = "filter")]
+    pub jq_filter: Option<String>,
+
     /// AND  logic for multi-keyword
     #[clap(
         short = 'a',

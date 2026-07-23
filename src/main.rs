@@ -15,7 +15,7 @@ use crate::column::Column;
 use crate::columns::*;
 use crate::config::*;
 use crate::opt::*;
-use crate::query::WhereFilter;
+use crate::query::{JqTransform, WhereFilter};
 use crate::util::{adjust, get_theme, has_regex_syntax, lap};
 use crate::view::View;
 use crate::watcher::Watcher;
@@ -219,6 +219,11 @@ fn run_default(opt: &mut Opt, config: &Config) -> Result<(), Error> {
         .as_deref()
         .map(WhereFilter::compile)
         .transpose()?;
+    let jq_transform = opt
+        .jq_filter
+        .as_deref()
+        .map(JqTransform::compile)
+        .transpose()?;
     let theme = get_theme(opt, config);
 
     let mut view = View::new(opt, config, false)?;
@@ -239,7 +244,11 @@ fn run_default(opt: &mut Opt, config: &Config) -> Result<(), Error> {
         lap(&mut time, "Info: view.adjust");
     }
 
-    view.display(opt, config, &theme)?;
+    if let Some(transform) = &jq_transform {
+        view.display_jq(transform, opt.pretty)?;
+    } else {
+        view.display(opt, config, &theme)?;
+    }
 
     if opt.debug {
         lap(&mut time, "Info: view.display");
@@ -259,8 +268,39 @@ fn validate_search_args(opt: &Opt) -> Result<(), Error> {
 }
 
 fn validate_output_args(opt: &Opt) -> Result<(), Error> {
-    if opt.pretty && !opt.json && !matches!(opt.output_format, Some(ArgOutputFormat::Json)) {
-        anyhow::bail!("--pretty requires --json or --format json");
+    if opt.pretty
+        && !opt.json
+        && opt.jq_filter.is_none()
+        && !matches!(opt.output_format, Some(ArgOutputFormat::Json))
+    {
+        anyhow::bail!("--pretty requires --json, --format json, or --jq");
+    }
+    if opt.jq_filter.is_some() {
+        if opt.watch_mode {
+            anyhow::bail!("--jq cannot be combined with watch mode");
+        }
+        if opt.json {
+            anyhow::bail!(
+                "--jq cannot be combined with legacy --json; omit --json or use --format json"
+            );
+        }
+        match opt.output_format {
+            Some(ArgOutputFormat::Jsonl) => {
+                anyhow::bail!("--jq cannot be combined with --format jsonl");
+            }
+            Some(ArgOutputFormat::Table) => {
+                anyhow::bail!("--jq cannot be combined with --format table");
+            }
+            Some(ArgOutputFormat::Json) | None => {}
+        }
+        if opt.list
+            || opt.gen_config
+            || opt.gen_completion.is_some()
+            || opt.gen_completion_out.is_some()
+            || opt.gen_man_page
+        {
+            anyhow::bail!("--jq is only available for process-list output");
+        }
     }
     if opt.watch_mode && opt.output_format == Some(ArgOutputFormat::Jsonl) {
         anyhow::bail!("--format jsonl cannot be combined with watch mode");
@@ -431,6 +471,32 @@ mod tests {
 
         let mut opt = Opt::parse_from(["procs", "--format", "jsonl", "--watch"]);
         opt.watch_mode = true;
+        assert!(validate_output_args(&opt).is_err());
+
+        let opt = Opt::parse_from(["procs", "--jq", ".", "--pretty"]);
+        assert!(validate_output_args(&opt).is_ok());
+
+        let opt = Opt::parse_from(["procs", "--jq", ".", "--format", "json"]);
+        assert!(validate_output_args(&opt).is_ok());
+
+        let mut opt = Opt::parse_from(["procs", "--jq", ".", "--watch"]);
+        opt.watch_mode = true;
+        assert_eq!(
+            validate_output_args(&opt).unwrap_err().to_string(),
+            "--jq cannot be combined with watch mode"
+        );
+
+        for args in [
+            ["procs", "--jq", ".", "--format", "jsonl"],
+            ["procs", "--jq", ".", "--format", "table"],
+        ] {
+            assert!(validate_output_args(&Opt::parse_from(args)).is_err());
+        }
+
+        let opt = Opt::parse_from(["procs", "--jq", ".", "--json"]);
+        assert!(validate_output_args(&opt).is_err());
+
+        let opt = Opt::parse_from(["procs", "--jq", ".", "--list"]);
         assert!(validate_output_args(&opt).is_err());
     }
 

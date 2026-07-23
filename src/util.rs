@@ -223,6 +223,44 @@ pub fn truncate(s: &'_ str, width: usize) -> Cow<'_, str> {
     }
 }
 
+/// Wrap a string into physical terminal lines using Unicode display width.
+///
+/// Unlike byte- or character-count based wrapping, this accounts for wide
+/// glyphs and combining characters. Every input character is preserved; an
+/// individual glyph wider than `width` is emitted on its own line.
+pub fn wrap(s: &str, width: usize) -> Vec<String> {
+    if width == 0 {
+        return vec![s.to_string()];
+    }
+
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    let mut line_width = 0;
+
+    for c in s.chars() {
+        if c == '\n' {
+            lines.push(std::mem::take(&mut line));
+            line_width = 0;
+            continue;
+        }
+
+        let char_width = UnicodeWidthChar::width(c).unwrap_or_default();
+        if !line.is_empty() && line_width + char_width > width {
+            lines.push(std::mem::take(&mut line));
+            line_width = 0;
+        }
+
+        line.push(c);
+        line_width += char_width;
+    }
+
+    if !line.is_empty() || lines.is_empty() || s.ends_with('\n') {
+        lines.push(line);
+    }
+
+    lines
+}
+
 /// Trim trailing whitespace from a string that may contain ANSI escape sequences.
 /// Unlike str::trim_end(), this correctly handles ANSI codes at the end of the string
 /// that would otherwise prevent trimming of trailing whitespace.
@@ -381,5 +419,35 @@ pub fn process_new(
         procfs::process::Process::new_with_root(path)
     } else {
         procfs::process::Process::new(pid)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::wrap;
+
+    #[test]
+    fn wrap_preserves_ascii_content() {
+        assert_eq!(wrap("abcdefgh", 3), ["abc", "def", "gh"]);
+    }
+
+    #[test]
+    fn wrap_uses_unicode_display_width() {
+        assert_eq!(wrap("a界b", 3), ["a界", "b"]);
+    }
+
+    #[test]
+    fn wrap_keeps_combining_characters_with_their_line() {
+        assert_eq!(wrap("e\u{301}x", 1), ["e\u{301}", "x"]);
+    }
+
+    #[test]
+    fn wrap_preserves_explicit_newlines_and_empty_lines() {
+        assert_eq!(wrap("ab\n\ncd\n", 10), ["ab", "", "cd", ""]);
+    }
+
+    #[test]
+    fn zero_width_preserves_the_input_as_one_line() {
+        assert_eq!(wrap("abc", 0), ["abc"]);
     }
 }

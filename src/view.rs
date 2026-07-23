@@ -10,13 +10,16 @@ use crate::style::{apply_color, apply_style, color_to_column_style};
 use crate::term_info::TermInfo;
 use crate::util::{
     KeywordClass, ansi_trim_end, classify, find_column_kind, find_exact, find_partial,
-    has_regex_syntax, truncate,
+    has_regex_syntax, truncate, wrap,
 };
 use anyhow::{Error, bail};
 #[cfg(not(target_os = "windows"))]
 use pager::Pager;
 use std::collections::HashMap;
 use std::time::Duration;
+use unicode_width::UnicodeWidthStr;
+
+const WATCH_BOTTOM_MARGIN: usize = 2;
 
 pub struct SortInfo {
     pub idx: usize,
@@ -369,8 +372,13 @@ impl View {
                 visible_pids.push(*pid);
             }
 
-            let reserved_rows = 4 + header_lines;
-            if opt.watch_mode && visible_pids.len() >= self.term_info.height - reserved_rows {
+            let available_rows = watch_content_height(
+                self.term_info.height,
+                header_lines,
+                !opt.no_header && config.display.show_header,
+                !opt.no_header && config.display.show_footer,
+            );
+            if opt.watch_mode && visible_pids.len() >= available_rows {
                 break;
             }
         }
@@ -414,6 +422,75 @@ impl View {
                 c.column.update_width(*pid, c.max_width);
             }
         }
+    }
+
+    pub fn fit_to_watch_height(
+        &mut self,
+        opt: &Opt,
+        config: &Config,
+        header_lines: usize,
+        min_widths: &HashMap<usize, usize>,
+    ) {
+        let available_rows = watch_content_height(
+            self.term_info.height,
+            header_lines,
+            !opt.no_header && config.display.show_header,
+            !opt.no_header && config.display.show_footer,
+        );
+        let candidate_pids = self.visible_pids.clone();
+        if available_rows == 0 {
+            self.visible_pids.clear();
+            self.adjust(config, min_widths);
+            return;
+        }
+
+        let visible_count =
+            largest_fitting_prefix_descending(candidate_pids.len(), available_rows, |count| {
+                self.visible_pids = candidate_pids[..count].to_vec();
+                self.adjust(config, min_widths);
+                self.wrapped_content_height()
+            });
+        self.visible_pids = candidate_pids[..visible_count].to_vec();
+        self.adjust(config, min_widths);
+    }
+
+    fn wrapped_content_height(&self) -> usize {
+        let Some((command_idx, command_width)) = self.flexible_command_layout() else {
+            return self.visible_pids.len();
+        };
+        self.visible_pids
+            .iter()
+            .map(|pid| {
+                let command = self.columns[command_idx]
+                    .column
+                    .display_content(*pid, &self.columns[command_idx].align)
+                    .unwrap_or_default();
+                wrap(command.trim_end(), command_width).len()
+            })
+            .sum()
+    }
+
+    fn flexible_command_layout(&self) -> Option<(usize, usize)> {
+        let command_idx = self
+            .columns
+            .iter()
+            .position(|c| c.visible && c.kind == ConfigColumnKind::Command)?;
+        let fixed_width = self
+            .columns
+            .iter()
+            .enumerate()
+            .filter(|(i, c)| c.visible && *i != command_idx)
+            .map(|(_, c)| c.column.get_width() + 1)
+            .sum::<usize>()
+            + 1;
+        let remaining_width = self.term_info.width.saturating_sub(fixed_width);
+        let command = &self.columns[command_idx];
+        let command_width = flexible_column_width(
+            remaining_width,
+            command.column.get_width(),
+            command.max_width,
+        );
+        (command_width > 0).then_some((command_idx, command_width))
     }
 
     pub fn display(
@@ -489,7 +566,7 @@ impl View {
         truncate |= use_terminal && !use_pager && config.display.cut_to_terminal;
         truncate |= !use_terminal && config.display.cut_to_pipe;
 
-        if !truncate {
+        if !truncate && !opt.watch_mode {
             self.term_info.width = usize::MAX;
         }
 
@@ -527,7 +604,7 @@ impl View {
 
         for pid in &self.visible_pids {
             let auxiliary = self.auxiliary_pids.contains(pid);
-            let _ = self.display_content(config, *pid, theme, auxiliary);
+            let _ = self.display_content(config, *pid, theme, auxiliary, opt.watch_mode);
         }
 
         if !opt.no_header && config.display.show_footer {
@@ -597,20 +674,30 @@ impl View {
         pid: i32,
         theme: &ConfigTheme,
         auxiliary: bool,
+        watch_wrap: bool,
     ) -> Result<(), Error> {
+        if watch_wrap && let Some((command_idx, command_width)) = self.flexible_command_layout() {
+            for row in
+                self.wrapped_content_rows(config, pid, theme, auxiliary, command_idx, command_width)
+            {
+                self.term_info.write_line(&row)?;
+            }
+            return Ok(());
+        }
+
         let mut row = String::new();
         for c in &self.columns {
             if c.visible {
-                row = format!(
-                    "{} {}",
-                    row,
-                    apply_style(
+                row.push(' ');
+                row.push_str(
+                    &apply_style(
                         c.column.display_content(pid, &c.align).unwrap(),
                         &c.style,
                         &config.style,
                         theme,
-                        auxiliary
+                        auxiliary,
                     )
+                    .to_string(),
                 );
             }
         }
@@ -618,6 +705,88 @@ impl View {
         row = truncate(&row, self.term_info.width).to_string();
         self.term_info.write_line(&row)?;
         Ok(())
+    }
+
+    fn wrapped_content_rows(
+        &self,
+        config: &Config,
+        pid: i32,
+        theme: &ConfigTheme,
+        auxiliary: bool,
+        command_idx: usize,
+        command_width: usize,
+    ) -> Vec<String> {
+        let mut prefix = String::new();
+        let mut prefix_width = 0;
+        for c in self.columns.iter().take(command_idx).filter(|c| c.visible) {
+            prefix.push(' ');
+            prefix.push_str(
+                &apply_style(
+                    c.column.display_content(pid, &c.align).unwrap(),
+                    &c.style,
+                    &config.style,
+                    theme,
+                    auxiliary,
+                )
+                .to_string(),
+            );
+            prefix_width += c.column.get_width() + 1;
+        }
+
+        let mut suffix = String::new();
+        for c in self
+            .columns
+            .iter()
+            .skip(command_idx + 1)
+            .filter(|c| c.visible)
+        {
+            suffix.push(' ');
+            suffix.push_str(
+                &apply_style(
+                    c.column.display_content(pid, &c.align).unwrap(),
+                    &c.style,
+                    &config.style,
+                    theme,
+                    auxiliary,
+                )
+                .to_string(),
+            );
+        }
+
+        let command = &self.columns[command_idx];
+        let content = command
+            .column
+            .display_content(pid, &command.align)
+            .unwrap_or_default();
+        wrap(content.trim_end(), command_width)
+            .into_iter()
+            .enumerate()
+            .map(|(i, fragment)| {
+                let mut row = if i == 0 {
+                    prefix.clone()
+                } else {
+                    " ".repeat(prefix_width)
+                };
+                row.push(' ');
+                row.push_str(
+                    &apply_style(
+                        fragment.clone(),
+                        &command.style,
+                        &config.style,
+                        theme,
+                        auxiliary,
+                    )
+                    .to_string(),
+                );
+                if i == 0 && !suffix.is_empty() {
+                    row.push_str(&" ".repeat(
+                        command_width.saturating_sub(UnicodeWidthStr::width(fragment.as_str())),
+                    ));
+                    row.push_str(&suffix);
+                }
+                ansi_trim_end(&row)
+            })
+            .collect()
     }
 
     fn json_row(&self, pid: i32, canonical: bool) -> serde_json::Value {
@@ -813,6 +982,34 @@ impl View {
     }
 }
 
+fn largest_fitting_prefix_descending<F>(
+    candidate_count: usize,
+    available_rows: usize,
+    mut height: F,
+) -> usize
+where
+    F: FnMut(usize) -> usize,
+{
+    for candidate in (0..=candidate_count).rev() {
+        if height(candidate) <= available_rows {
+            return candidate;
+        }
+    }
+    0
+}
+
+fn flexible_column_width(
+    remaining_width: usize,
+    measured_width: usize,
+    max_width: Option<usize>,
+) -> usize {
+    if max_width.is_some() {
+        remaining_width.min(measured_width)
+    } else {
+        remaining_width
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum JsonMode {
     LegacyArray,
@@ -860,9 +1057,22 @@ fn serialize_json_rows(rows: &[serde_json::Value], pretty: bool) -> Result<Strin
     Ok(output)
 }
 
+fn watch_content_height(
+    terminal_height: usize,
+    watch_header_lines: usize,
+    show_table_header: bool,
+    show_table_footer: bool,
+) -> usize {
+    let table_header_lines = usize::from(show_table_header) * 2;
+    let table_footer_lines = usize::from(show_table_footer) * 2;
+    terminal_height.saturating_sub(
+        watch_header_lines + table_header_lines + table_footer_lines + WATCH_BOTTOM_MARGIN,
+    )
+}
+
 #[cfg(test)]
 mod json_tests {
-    use super::{serialize_json_rows, to_snake_case};
+    use super::{serialize_json_rows, to_snake_case, watch_content_height};
     use serde_json::json;
 
     #[test]
@@ -893,5 +1103,67 @@ mod json_tests {
         assert_eq!(to_snake_case("CpuTime"), "cpu_time");
         assert_eq!(to_snake_case("VmRSS"), "vm_rss");
         assert_eq!(to_snake_case("TCPPort"), "tcp_port");
+    }
+
+    #[test]
+    fn watch_height_accounts_for_headers_footers_and_margin() {
+        assert_eq!(watch_content_height(20, 3, true, false), 13);
+        assert_eq!(watch_content_height(20, 3, false, false), 15);
+        assert_eq!(watch_content_height(20, 3, true, true), 11);
+    }
+
+    #[test]
+    fn watch_height_saturates_for_tiny_terminals() {
+        assert_eq!(watch_content_height(3, 3, true, true), 0);
+    }
+}
+
+#[cfg(test)]
+mod watch_layout_tests {
+    use super::{flexible_column_width, largest_fitting_prefix_descending};
+    use std::cell::RefCell;
+
+    #[test]
+    fn fitting_recomputes_layout_for_each_candidate_prefix() {
+        let heights = [0, 1, 3, 6];
+        assert_eq!(
+            largest_fitting_prefix_descending(3, 3, |count| heights[count]),
+            2
+        );
+        assert_eq!(
+            largest_fitting_prefix_descending(3, 6, |count| heights[count]),
+            3
+        );
+    }
+
+    #[test]
+    fn fitting_can_refill_after_discarded_rows_stop_widening_fixed_columns() {
+        let height_after_relayout = [0, 1, 2, 7];
+        assert_eq!(
+            largest_fitting_prefix_descending(3, 3, |count| height_after_relayout[count]),
+            2
+        );
+    }
+
+    #[test]
+    fn fitting_only_probes_smaller_prefixes_for_stateful_columns() {
+        let probes = RefCell::new(Vec::new());
+        let selected = largest_fitting_prefix_descending(4, 2, |count| {
+            probes.borrow_mut().push(count);
+            count
+        });
+        assert_eq!(selected, 2);
+        assert_eq!(*probes.borrow(), [4, 3, 2]);
+    }
+
+    #[test]
+    fn configured_command_max_width_keeps_following_columns_aligned() {
+        assert_eq!(flexible_column_width(80, 10, Some(10)), 10);
+        assert_eq!(flexible_column_width(8, 10, Some(10)), 8);
+    }
+
+    #[test]
+    fn unbounded_command_uses_all_remaining_terminal_width() {
+        assert_eq!(flexible_column_width(80, 10, None), 80);
     }
 }

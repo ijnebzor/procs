@@ -20,7 +20,8 @@ pub trait Column {
     ) -> String;
     fn display_unit(&self, align: &ConfigColumnAlign) -> String;
     fn display_content(&self, pid: i32, align: &ConfigColumnAlign) -> Option<String>;
-    fn display_json(&self, pid: i32) -> String;
+    fn display_json(&self, pid: i32) -> Option<(String, serde_json::Value)>;
+    fn search_content(&self, pid: i32) -> Option<String>;
     fn find_partial(&self, pid: i32, keyword: &str, content_to_lowercase: bool) -> bool;
     fn find_exact(&self, pid: i32, keyword: &str, content_to_lowercase: bool) -> bool;
     fn sorted_pid(&self, order: &ConfigSortOrder) -> Vec<i32>;
@@ -90,23 +91,33 @@ macro_rules! column_default_display_content {
 #[macro_export]
 macro_rules! column_default_display_json {
     () => {
-        fn display_json(&self, pid: i32) -> String {
+        fn display_json(&self, pid: i32) -> Option<(String, serde_json::Value)> {
             let value = if self.is_numeric() {
                 self.raw_contents
                     .get(&pid)
-                    .map(|x| x.to_string())
-                    .unwrap_or("".to_string())
+                    .map(|x| {
+                        let text = x.to_string();
+                        serde_json::from_str(&text)
+                            .unwrap_or_else(|_| serde_json::Value::String(text))
+                    })
+                    .unwrap_or(serde_json::Value::Null)
             } else {
-                let value = self
-                    .fmt_contents
-                    .get(&pid)
-                    .map(|x| x.clone())
-                    .unwrap_or("".to_string());
-                let value = value.replace("\\", "\\\\");
-                let value = value.replace("\"", "\\\"");
-                format!("\"{}\"", value)
+                serde_json::Value::String(self.fmt_contents.get(&pid).cloned().unwrap_or_default())
             };
-            format!("\"{}\": {}", self.header, value)
+            Some((self.header.clone(), value))
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! column_default_search_content {
+    () => {
+        fn search_content(&self, pid: i32) -> Option<String> {
+            if self.is_numeric() {
+                self.raw_contents.get(&pid).map(|x| x.to_string())
+            } else {
+                self.fmt_contents.get(&pid).cloned()
+            }
         }
     };
 }
@@ -243,6 +254,7 @@ macro_rules! column_default {
         $crate::column_default_display_unit!();
         $crate::column_default_display_content!();
         $crate::column_default_display_json!();
+        $crate::column_default_search_content!();
         $crate::column_default_find_partial!();
         $crate::column_default_find_exact!();
         $crate::column_default_sorted_pid!($x);

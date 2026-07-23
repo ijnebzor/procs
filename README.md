@@ -245,6 +245,16 @@ Instead of them, built-in pager can be used by configuration `use_builtin`.
 
 On Windows, built-in pager is always used.
 
+### JSON output
+
+Use `--json` to emit process data as valid JSON. Add `--pretty` for human-readable indentation.
+
+```console
+procs --json
+procs --json --pretty
+procs --json | jq '.[] | select(.CPU > 10)'
+```
+
 ### Watch mode
 
 If `--watch` or `--watch-interval <second>` option is used, procs automatically updates output like `top`.

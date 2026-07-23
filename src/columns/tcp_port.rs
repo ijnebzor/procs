@@ -106,6 +106,7 @@ impl Column for TcpPort {
     crate::column_default_display_unit!();
     crate::column_default_display_content!();
     crate::column_default_display_json!();
+    crate::column_default_search_content!();
     crate::column_default_find_partial!();
     crate::column_default_sorted_pid!(String);
     crate::column_default_apply_visible!();
@@ -154,6 +155,7 @@ impl Column for TcpPort {
     crate::column_default_display_unit!();
     crate::column_default_display_content!();
     crate::column_default_display_json!();
+    crate::column_default_search_content!();
     crate::column_default_find_partial!();
     crate::column_default_sorted_pid!(String);
     crate::column_default_apply_visible!();
@@ -200,6 +202,7 @@ impl Column for TcpPort {
     crate::column_default_display_unit!();
     crate::column_default_display_content!();
     crate::column_default_display_json!();
+    crate::column_default_search_content!();
     crate::column_default_find_partial!();
     crate::column_default_sorted_pid!(String);
     crate::column_default_apply_visible!();

@@ -119,8 +119,12 @@ impl Column for Tree {
     }
 
     // Tree doesn't support JSON
-    fn display_json(&self, _pid: i32) -> String {
-        "".to_string()
+    fn display_json(&self, _pid: i32) -> Option<(String, serde_json::Value)> {
+        None
+    }
+
+    fn search_content(&self, _pid: i32) -> Option<String> {
+        None
     }
 
     fn find_partial(&self, _pid: i32, _keyword: &str, _content_to_lowercase: bool) -> bool {

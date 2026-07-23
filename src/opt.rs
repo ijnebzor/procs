@@ -160,6 +160,10 @@ pub struct Opt {
     #[clap(long = "json")]
     pub json: bool,
 
+    /// Pretty-print JSON output
+    #[clap(long = "pretty", requires = "json")]
+    pub pretty: bool,
+
     /// Interval to calculate throughput
     #[clap(long = "interval", default_value = "100", value_name = "millisec")]
     pub interval: u64,

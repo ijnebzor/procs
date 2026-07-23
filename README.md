@@ -247,13 +247,26 @@ On Windows, built-in pager is always used.
 
 ### JSON output
 
-Use `--json` to emit process data as valid JSON. Add `--pretty` for human-readable indentation.
+`--json` preserves the original display-oriented JSON format, including configured column headers.
+Add `--pretty` for human-readable indentation.
 
 ```console
 procs --json
 procs --json --pretty
 procs --json | jq '.[] | select(.CPU > 10)'
 ```
+
+For scripts and integrations, `--format json` emits stable snake_case keys derived from column
+identifiers rather than display headers. `--format jsonl` emits one canonical process object per line.
+
+```console
+procs --format json
+procs --format json --pretty
+procs --format json | jq '.[] | select(.usage_cpu > 10)'
+procs --format jsonl | jq 'select(.user == "root")'
+```
+
+JSONL is intended for streaming pipelines and cannot be combined with `--pretty` or watch mode.
 
 ### Watch mode
 

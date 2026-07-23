@@ -29,6 +29,13 @@ pub enum ArgPagerMode {
     Disable,
 }
 
+#[derive(ValueEnum, Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ArgOutputFormat {
+    Table,
+    Json,
+    Jsonl,
+}
+
 #[derive(Clone, Debug, ValueEnum)]
 pub enum BuiltinConfig {
     Default,
@@ -157,11 +164,15 @@ pub struct Opt {
     pub pager: Option<ArgPagerMode>,
 
     /// JSON output
-    #[clap(long = "json")]
+    #[clap(long = "json", conflicts_with = "output_format")]
     pub json: bool,
 
+    /// Output format (canonical JSON formats use stable snake_case keys)
+    #[clap(long = "format", value_name = "format")]
+    pub output_format: Option<ArgOutputFormat>,
+
     /// Pretty-print JSON output
-    #[clap(long = "pretty", requires = "json")]
+    #[clap(long = "pretty")]
     pub pretty: bool,
 
     /// Interval to calculate throughput

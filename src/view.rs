@@ -2,7 +2,7 @@ use crate::Opt;
 use crate::column::Column;
 use crate::columns::*;
 use crate::config::*;
-use crate::opt::{ArgColorMode, ArgPagerMode};
+use crate::opt::{ArgColorMode, ArgOutputFormat, ArgPagerMode};
 use crate::process::collect_proc;
 use crate::search_regex::SearchRegex;
 use crate::style::{apply_color, apply_style, color_to_column_style};
@@ -411,9 +411,19 @@ impl View {
         config: &Config,
         theme: &ConfigTheme,
     ) -> Result<(), Error> {
-        if opt.json {
+        let json_mode = if opt.json {
+            Some(JsonMode::LegacyArray)
+        } else {
+            match opt.output_format {
+                Some(ArgOutputFormat::Json) => Some(JsonMode::CanonicalArray),
+                Some(ArgOutputFormat::Jsonl) => Some(JsonMode::CanonicalLines),
+                Some(ArgOutputFormat::Table) | None => None,
+            }
+        };
+
+        if let Some(mode) = json_mode {
             self.term_info.use_pager = false;
-            self.display_json(opt.pretty)?;
+            self.display_json(mode, opt.pretty)?;
             return Ok(());
         }
 
@@ -599,14 +609,19 @@ impl View {
         Ok(())
     }
 
-    fn json_rows(&self) -> Vec<serde_json::Value> {
+    fn json_rows(&self, canonical: bool) -> Vec<serde_json::Value> {
         self.visible_pids
             .iter()
             .map(|pid| {
                 let mut row = serde_json::Map::new();
                 for c in &self.columns {
                     if c.visible && c.kind != ConfigColumnKind::Separator {
-                        if let Some((key, value)) = c.column.display_json(*pid) {
+                        if let Some((display_key, value)) = c.column.display_json(*pid) {
+                            let key = if canonical {
+                                canonical_key(&c.kind).unwrap_or(display_key)
+                            } else {
+                                display_key
+                            };
                             row.insert(key, value);
                         }
                     }
@@ -616,9 +631,20 @@ impl View {
             .collect()
     }
 
-    fn display_json(&self, pretty: bool) -> Result<(), Error> {
-        let output = serialize_json_rows(&self.json_rows(), pretty)?;
-        self.term_info.write_line(&output)?;
+    fn display_json(&self, mode: JsonMode, pretty: bool) -> Result<(), Error> {
+        let canonical = mode != JsonMode::LegacyArray;
+        let rows = self.json_rows(canonical);
+        match mode {
+            JsonMode::LegacyArray | JsonMode::CanonicalArray => {
+                let output = serialize_json_rows(&rows, pretty)?;
+                self.term_info.write_line(&output)?;
+            }
+            JsonMode::CanonicalLines => {
+                for row in rows {
+                    self.term_info.write_line(&serde_json::to_string(&row)?)?;
+                }
+            }
+        }
         Ok(())
     }
 
@@ -774,6 +800,36 @@ impl View {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum JsonMode {
+    LegacyArray,
+    CanonicalArray,
+    CanonicalLines,
+}
+
+fn canonical_key(kind: &ConfigColumnKind) -> Option<String> {
+    KIND_LIST.get(kind).map(|(name, _)| to_snake_case(name))
+}
+
+fn to_snake_case(name: &str) -> String {
+    let chars: Vec<char> = name.chars().collect();
+    let mut output = String::with_capacity(name.len());
+    for (i, ch) in chars.iter().copied().enumerate() {
+        if ch.is_uppercase() && i > 0 {
+            let previous = chars[i - 1];
+            let next_is_lowercase = chars
+                .get(i + 1)
+                .map(|next| next.is_lowercase())
+                .unwrap_or(false);
+            if previous.is_lowercase() || (previous.is_uppercase() && next_is_lowercase) {
+                output.push('_');
+            }
+        }
+        output.extend(ch.to_lowercase());
+    }
+    output
+}
+
 fn serialize_json_rows(rows: &[serde_json::Value], pretty: bool) -> Result<String, Error> {
     if pretty {
         return Ok(serde_json::to_string_pretty(rows)?);
@@ -793,7 +849,7 @@ fn serialize_json_rows(rows: &[serde_json::Value], pretty: bool) -> Result<Strin
 
 #[cfg(test)]
 mod json_tests {
-    use super::serialize_json_rows;
+    use super::{serialize_json_rows, to_snake_case};
     use serde_json::json;
 
     #[test]
@@ -816,5 +872,13 @@ mod json_tests {
         assert!(output.contains("\n  {\n"));
         let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
         assert_eq!(parsed, serde_json::Value::Array(rows));
+    }
+
+    #[test]
+    fn canonical_keys_are_snake_case_and_preserve_acronyms() {
+        assert_eq!(to_snake_case("Pid"), "pid");
+        assert_eq!(to_snake_case("CpuTime"), "cpu_time");
+        assert_eq!(to_snake_case("VmRSS"), "vm_rss");
+        assert_eq!(to_snake_case("TCPPort"), "tcp_port");
     }
 }

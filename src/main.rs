@@ -142,6 +142,7 @@ fn run() -> Result<(), Error> {
     let mut opt: Opt = Parser::parse();
     opt.watch_mode = opt.watch || opt.watch_interval.is_some();
     validate_search_args(&opt)?;
+    validate_output_args(&opt)?;
 
     if opt.gen_config {
         run_gen_config()
@@ -246,6 +247,16 @@ fn validate_search_args(opt: &Opt) -> Result<(), Error> {
     }
     if opt.smart && opt.keyword.len() > 1 && opt.keyword.iter().any(|k| has_regex_syntax(k)) {
         anyhow::bail!("--smart supports a single PATTERN when regex syntax is detected");
+    }
+    Ok(())
+}
+
+fn validate_output_args(opt: &Opt) -> Result<(), Error> {
+    if opt.pretty && !opt.json && !matches!(opt.output_format, Some(ArgOutputFormat::Json)) {
+        anyhow::bail!("--pretty requires --json or --format json");
+    }
+    if opt.watch_mode && opt.output_format == Some(ArgOutputFormat::Jsonl) {
+        anyhow::bail!("--format jsonl cannot be combined with watch mode");
     }
     Ok(())
 }
@@ -395,5 +406,29 @@ mod tests {
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
+    }
+
+    #[test]
+    fn test_validate_output_args() {
+        let opt = Opt::parse_from(["procs", "--json", "--pretty"]);
+        assert!(validate_output_args(&opt).is_ok());
+
+        let opt = Opt::parse_from(["procs", "--format", "json", "--pretty"]);
+        assert!(validate_output_args(&opt).is_ok());
+
+        let opt = Opt::parse_from(["procs", "--pretty"]);
+        assert!(validate_output_args(&opt).is_err());
+
+        let opt = Opt::parse_from(["procs", "--format", "jsonl", "--pretty"]);
+        assert!(validate_output_args(&opt).is_err());
+
+        let mut opt = Opt::parse_from(["procs", "--format", "jsonl", "--watch"]);
+        opt.watch_mode = true;
+        assert!(validate_output_args(&opt).is_err());
+    }
+
+    #[test]
+    fn test_legacy_json_conflicts_with_canonical_format() {
+        assert!(Opt::try_parse_from(["procs", "--json", "--format", "json"]).is_err());
     }
 }

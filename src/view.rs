@@ -4,6 +4,7 @@ use crate::columns::*;
 use crate::config::*;
 use crate::opt::{ArgColorMode, ArgOutputFormat, ArgPagerMode};
 use crate::process::collect_proc;
+use crate::query::WhereFilter;
 use crate::search_regex::SearchRegex;
 use crate::style::{apply_color, apply_style, color_to_column_style};
 use crate::term_info::TermInfo;
@@ -219,7 +220,13 @@ impl View {
         })
     }
 
-    pub fn filter(&mut self, opt: &Opt, config: &Config, header_lines: usize) -> Result<(), Error> {
+    pub fn filter(
+        &mut self,
+        opt: &Opt,
+        config: &Config,
+        header_lines: usize,
+        where_filter: Option<&WhereFilter>,
+    ) -> Result<(), Error> {
         let mut cols_nonnumeric = Vec::new();
         let mut cols_numeric = Vec::new();
         let mut cols_searchable = Vec::new();
@@ -307,7 +314,7 @@ impl View {
             let hidden_process = (!config.display.show_self && *pid == self_pid)
                 || (!config.display.show_self_parents && self_parents.contains(pid));
 
-            let candidate = if hidden_process {
+            let mut candidate = if hidden_process {
                 false
             } else if opt.keyword.is_empty() {
                 true
@@ -324,6 +331,10 @@ impl View {
                     &logic,
                 )
             };
+
+            if candidate && let Some(where_filter) = where_filter {
+                candidate = where_filter.matches(&self.json_row(*pid, true))?;
+            }
 
             if candidate {
                 candidate_pids.push(*pid);
@@ -609,25 +620,27 @@ impl View {
         Ok(())
     }
 
+    fn json_row(&self, pid: i32, canonical: bool) -> serde_json::Value {
+        let mut row = serde_json::Map::new();
+        for c in &self.columns {
+            if c.visible && c.kind != ConfigColumnKind::Separator {
+                if let Some((display_key, value)) = c.column.display_json(pid) {
+                    let key = if canonical {
+                        canonical_key(&c.kind).unwrap_or(display_key)
+                    } else {
+                        display_key
+                    };
+                    row.insert(key, value);
+                }
+            }
+        }
+        serde_json::Value::Object(row)
+    }
+
     fn json_rows(&self, canonical: bool) -> Vec<serde_json::Value> {
         self.visible_pids
             .iter()
-            .map(|pid| {
-                let mut row = serde_json::Map::new();
-                for c in &self.columns {
-                    if c.visible && c.kind != ConfigColumnKind::Separator {
-                        if let Some((display_key, value)) = c.column.display_json(*pid) {
-                            let key = if canonical {
-                                canonical_key(&c.kind).unwrap_or(display_key)
-                            } else {
-                                display_key
-                            };
-                            row.insert(key, value);
-                        }
-                    }
-                }
-                serde_json::Value::Object(row)
-            })
+            .map(|pid| self.json_row(*pid, canonical))
             .collect()
     }
 

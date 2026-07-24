@@ -805,15 +805,16 @@ impl View {
     fn json_row(&self, pid: i32, canonical: bool) -> serde_json::Value {
         let mut row = serde_json::Map::new();
         for c in &self.columns {
-            if c.visible && c.kind != ConfigColumnKind::Separator {
-                if let Some((display_key, value)) = c.column.display_json(pid) {
-                    let key = if canonical {
-                        canonical_key(&c.kind).unwrap_or(display_key)
-                    } else {
-                        display_key
-                    };
-                    row.insert(key, value);
-                }
+            if c.visible
+                && c.kind != ConfigColumnKind::Separator
+                && let Some((display_key, value)) = c.column.display_json(pid)
+            {
+                let key = if canonical {
+                    canonical_key(&c.kind).unwrap_or(display_key)
+                } else {
+                    display_key
+                };
+                row.insert(key, value);
             }
         }
         serde_json::Value::Object(row)

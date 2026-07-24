@@ -74,21 +74,21 @@ pub fn collect_proc(
         let fds = listpidinfo::<ListFDs>(pid, curr_task.pbsd.pbi_nfiles as usize);
         if let Ok(fds) = fds {
             for fd in fds {
-                if let ProcFDType::Socket = fd.proc_fdtype.into() {
-                    if let Ok(socket) = pidfdinfo::<SocketFDInfo>(pid, fd.proc_fd) {
-                        match socket.psi.soi_kind.into() {
-                            SocketInfoKind::In => {
-                                if socket.psi.soi_protocol == libc::IPPROTO_UDP {
-                                    let info = unsafe { socket.psi.soi_proto.pri_in };
-                                    curr_udps.push(info);
-                                }
+                if let ProcFDType::Socket = fd.proc_fdtype.into()
+                    && let Ok(socket) = pidfdinfo::<SocketFDInfo>(pid, fd.proc_fd)
+                {
+                    match socket.psi.soi_kind.into() {
+                        SocketInfoKind::In => {
+                            if socket.psi.soi_protocol == libc::IPPROTO_UDP {
+                                let info = unsafe { socket.psi.soi_proto.pri_in };
+                                curr_udps.push(info);
                             }
-                            SocketInfoKind::Tcp => {
-                                let info = unsafe { socket.psi.soi_proto.pri_tcp };
-                                curr_tcps.push(info);
-                            }
-                            _ => (),
                         }
+                        SocketInfoKind::Tcp => {
+                            let info = unsafe { socket.psi.soi_proto.pri_tcp };
+                            curr_tcps.push(info);
+                        }
+                        _ => (),
                     }
                 }
             }
@@ -152,14 +152,12 @@ pub struct PathInfo {
 
 unsafe fn get_unchecked_str(cp: *mut u8, start: *mut u8) -> String {
     let len = cp as usize - start as usize;
-    let part = Vec::from_raw_parts(start, len, len);
-    let tmp = String::from_utf8_unchecked(part.clone());
-    ::std::mem::forget(part);
-    tmp
+    let bytes = unsafe { ::std::slice::from_raw_parts(start, len) };
+    unsafe { String::from_utf8_unchecked(bytes.to_vec()) }
 }
 
 fn get_path_info(pid: i32, mut size: size_t) -> Option<PathInfo> {
-    let mut proc_args = Vec::with_capacity(size as usize);
+    let mut proc_args = Vec::with_capacity(size);
     let ptr: *mut u8 = proc_args.as_mut_slice().as_mut_ptr();
 
     let mut mib: [c_int; 3] = [libc::CTL_KERN, libc::KERN_PROCARGS2, pid as c_int];
@@ -195,11 +193,11 @@ fn get_path_info(pid: i32, mut size: size_t) -> Option<PathInfo> {
                     .to_owned();
                 let mut need_root = true;
                 let mut root = Default::default();
-                if exe.is_absolute() {
-                    if let Some(parent) = exe.parent() {
-                        root = parent.to_path_buf();
-                        need_root = false;
-                    }
+                if exe.is_absolute()
+                    && let Some(parent) = exe.parent()
+                {
+                    root = parent.to_path_buf();
+                    need_root = false;
                 }
                 while cp < ptr.add(size) && *cp == 0 {
                     cp = cp.offset(1);

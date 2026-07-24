@@ -49,11 +49,11 @@ impl Column for ReadBytes {
 #[cfg(target_os = "macos")]
 impl Column for ReadBytes {
     fn add(&mut self, proc: &ProcessInfo) {
-        let (fmt_content, raw_content) = if proc.curr_res.is_some() && proc.prev_res.is_some() {
+        let (fmt_content, raw_content) = if let (Some(curr_res), Some(prev_res)) =
+            (&proc.curr_res, &proc.prev_res)
+        {
             let interval_ms = proc.interval.as_secs() + u64::from(proc.interval.subsec_millis());
-            let io = (proc.curr_res.as_ref().unwrap().ri_diskio_bytesread
-                - proc.prev_res.as_ref().unwrap().ri_diskio_bytesread)
-                * 1000
+            let io = (curr_res.ri_diskio_bytesread - prev_res.ri_diskio_bytesread) * 1000
                 / interval_ms;
             (bytify(io), io)
         } else {

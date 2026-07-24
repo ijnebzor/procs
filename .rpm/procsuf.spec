@@ -2,8 +2,8 @@
 %define __os_install_post %{_dbpath}/brp-compress
 %define debug_package %{nil}
 
-Name: procs
-Summary: A modern replacement for ps
+Name: procsuf
+Summary: A fork of procs that is finally unfucked.
 Version: @@VERSION@@
 Release: @@RELEASE@@
 License: MIT

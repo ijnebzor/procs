@@ -161,7 +161,7 @@ impl View {
 
         if slot_idx < opt.insert.len() {
             bail!(
-                "There is not enough slot for inserting columns {:?}.\nPlease add \"Slot\" or \"MultiSlot\" to your config.\nhttps://github.com/dalance/procs#insert-column",
+                "There is not enough slot for inserting columns {:?}.\nPlease add \"Slot\" or \"MultiSlot\" to your config.\nhttps://github.com/ijnebzor/procsuf#insert-column",
                 opt.insert
             );
         }
@@ -1102,7 +1102,7 @@ mod json_tests {
 
     #[test]
     fn pretty_json_is_multiline_and_valid() {
-        let rows = vec![json!({"PID": 42, "Command": "procs"})];
+        let rows = vec![json!({"PID": 42, "Command": "procsuf"})];
 
         let output = serialize_json_rows(&rows, true).unwrap();
         assert!(output.contains("\n  {\n"));

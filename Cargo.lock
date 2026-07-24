@@ -1863,8 +1863,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "procs"
-version = "0.14.12"
+name = "procsuf"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "bsd-kvm",

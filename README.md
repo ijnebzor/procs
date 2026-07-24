@@ -1,13 +1,13 @@
-# procs
+# procsuf
 
-**procs** is a replacement for `ps` written in [Rust](https://www.rust-lang.org/).
+**procsuf** — **procs unfucked.**
 
-[![Actions Status](https://github.com/dalance/procs/workflows/Regression/badge.svg)](https://github.com/dalance/procs/actions)
+`procsuf` is a fork of [`procs`](https://github.com/dalance/procs), a replacement for `ps` written in [Rust](https://www.rust-lang.org/). It preserves the upstream project's work and MIT license while giving the fork an independent package, command, and configuration identity.
 
-[![Changelog](https://img.shields.io/badge/changelog-v0.14.12-green.svg)](https://github.com/dalance/procs/blob/master/CHANGELOG.md)
-[![Crates.io](https://img.shields.io/crates/v/procs.svg)](https://crates.io/crates/procs)
-[![procs](https://snapcraft.io/procs/badge.svg)](https://snapcraft.io/procs)
-[![homebrew](https://img.shields.io/homebrew/v/procs.svg)](https://formulae.brew.sh/formula/procs)
+[![Actions Status](https://github.com/ijnebzor/procsuf/workflows/Regression/badge.svg)](https://github.com/ijnebzor/procsuf/actions)
+
+[![Changelog](https://img.shields.io/badge/changelog-v0.1.0-green.svg)](https://github.com/ijnebzor/procsuf/blob/master/CHANGELOG.md)
+[![Crates.io](https://img.shields.io/crates/v/procsuf.svg)](https://crates.io/crates/procsuf)
 
 ## Documentation quick links
 
@@ -42,109 +42,31 @@
 
 ## Installation
 
-### Download binary
+### Cargo from Git
 
-Download from [release page](https://github.com/dalance/procs/releases/latest), and extract to the directory in PATH.
+Install the current source with Cargo:
 
-### [![Packaging status](https://repology.org/badge/vertical-allrepos/procs.svg?columns=3)](https://repology.org/project/procs/versions)
-
-### Nixpkgs
-
-You can install from [Nixpkgs](https://github.com/NixOS/nixpkgs/blob/master/pkgs/tools/admin/procs/default.nix).
-
-```
-nix-env --install procs
+```console
+cargo install --git https://github.com/ijnebzor/procsuf.git --locked
 ```
 
-### snapcraft
+This installs the `procsuf` executable without replacing an existing upstream `procs` executable.
 
-You can install from [snapcraft](https://snapcraft.io/procs).
+### Download a binary
 
-```
-sudo snap install procs
-```
+Download an archive from the [procsuf release page](https://github.com/ijnebzor/procsuf/releases/latest), extract it, and place `procsuf` in a directory on `PATH`.
 
-### homebrew
+### Build from a checkout
 
-You can install from [homebrew](https://formulae.brew.sh/formula/procs).
-
-```
-brew install procs
+```console
+git clone https://github.com/ijnebzor/procsuf.git
+cd procsuf
+cargo build --release --locked
 ```
 
-### MacPorts
+The executable is written to `target/release/procsuf`.
 
-You can install from [MacPorts](https://ports.macports.org/port/procs/).
-
-```
-sudo port install procs
-```
-
-### Alpine Linux
-
-You can install from the [Alpine Linux repository](https://pkgs.alpinelinux.org/packages?name=procs).
-
-The correct repository (see above link for the most up-to-date information) should be enabled before `apk add`.
-
-```
-sudo apk add procs
-```
-
-### Arch Linux
-
-You can install from the [Arch Linux extra repository](https://archlinux.org/packages/extra/x86_64/procs/).
-
-```
-sudo pacman -S procs
-```
-
-### Scoop
-
-You can install with [scoop](https://scoop.sh/).
-
-```
-scoop install procs
-```
-
-### Fedora
-
-```
-sudo dnf install procs
-```
-
-### Windows
-
-```
-winget install procs
-```
-
-### RPM
-
-You can install with rpm.
-
-```
-sudo rpm -i https://github.com/dalance/procs/releases/download/v0.14.12/procs-0.14.12-1.x86_64.rpm
-```
-
-### Cargo
-
-You can install with [cargo](https://crates.io/crates/procs).
-
-```
-cargo install procs
-```
-
-### X-CMD
-
-You can install with [x-cmd](https://www.x-cmd.com).
-
-```
-x env use procs
-# or
-x procs # Download procs, and invoke procs in a way that does not affect the current environment
-```
-
-## Installation Notes
+## Installation notes
 
 ### Permissions issues
 
@@ -154,15 +76,15 @@ On Linux, normal users can't access some information (ex. Read/Write throughput)
 If you want to show this information, you should use `sudo`.
 
 ```console
-$ sudo procs
+$ sudo procsuf
 [sudo] password for ...:
 ```
 
 If you want to skip password input, you can add the following entry to `/etc/sudoers`.
 
 ```text
-[user or group] ALL= NOPASSWD: [procs binary path]
-// ex. myuser ALL= NOPASSWD: /usr/local/bin/procs
+[user or group] ALL= NOPASSWD: [procsuf binary path]
+// ex. myuser ALL= NOPASSWD: /usr/local/bin/procsuf
 ```
 
 ## Usage
@@ -171,25 +93,25 @@ In the following screenshots, `config/large.toml` is used as the configuration.
 
 ### Show all processes
 
-Type `procs` only. It shows the information of all processes.
+Type `procsuf` only. It shows the information of all processes.
 
 ```console
-procs
+procsuf
 ```
 
-![procs](https://user-images.githubusercontent.com/4331004/55446625-5e5fce00-55fb-11e9-8914-69e8640d89d7.png)
+![procsuf](https://user-images.githubusercontent.com/4331004/55446625-5e5fce00-55fb-11e9-8914-69e8640d89d7.png)
 
 ### Search by non-numeric keyword
 
 If you add any keyword as argument, it is matched to `USER`, `Command` by default.
 
 ```console
-procs zsh
+procsuf zsh
 ```
 
 If you want to add columns matching to non-numeric keyword, `nonnumeric_search` option can be used in configuration file.
 
-![procs_zsh](https://user-images.githubusercontent.com/4331004/55446648-71729e00-55fb-11e9-8e12-1ca63911c568.png)
+![procsuf_zsh](https://user-images.githubusercontent.com/4331004/55446648-71729e00-55fb-11e9-8e12-1ca63911c568.png)
 
 ### Search by numeric keyword
 
@@ -197,12 +119,12 @@ If a numeric is used as the keyword, it is matched to `PID` by default.
 Numeric is treated as exact match, and non-numeric is treated as partial match by default.
 
 ```console
-procs --or 6000 60000 60001 16723
+procsuf --or 6000 60000 60001 16723
 ```
 
 If you want to add columns matching to numeric keyword, `numeric_search` option can be used in configuration file.
 
-![procs_port](https://user-images.githubusercontent.com/4331004/55446667-83ecd780-55fb-11e9-8959-53209837c4ee.png)
+![procsuf_port](https://user-images.githubusercontent.com/4331004/55446667-83ecd780-55fb-11e9-8959-53209837c4ee.png)
 
 Note that procfs permissions only allow identifying listening ports for processes owned by the current user, so not all ports will show up unless run as root.
 
@@ -222,12 +144,12 @@ The default operation can be specified in the [configuration file](#configuratio
 If you have access permission to docker daemon ( `unix:///var/run/docker.sock` ), `Docker` column is added.
 
 ```console
-procs growi
+procsuf growi
 ```
 
-![procs_docker](https://user-images.githubusercontent.com/4331004/55446681-91a25d00-55fb-11e9-943d-5b5caeb23c62.png)
+![procsuf_docker](https://user-images.githubusercontent.com/4331004/55446681-91a25d00-55fb-11e9-943d-5b5caeb23c62.png)
 
-Note that procs gets the container information through UNIX domain socket, so [Docker Toolbox](https://docs.docker.com/toolbox/) on macOS (doesn't use UNIX domain socket) is not supported.
+Note that procsuf gets the container information through UNIX domain socket, so [Docker Toolbox](https://docs.docker.com/toolbox/) on macOS (doesn't use UNIX domain socket) is not supported.
 [Docker Desktop for Mac](https://docs.docker.com/docker-for-mac/) is supported but not tested.
 
 ### Pager
@@ -251,19 +173,19 @@ On Windows, built-in pager is always used.
 Add `--pretty` for human-readable indentation.
 
 ```console
-procs --json
-procs --json --pretty
-procs --json | jq '.[] | select(.CPU > 10)'
+procsuf --json
+procsuf --json --pretty
+procsuf --json | jq '.[] | select(.CPU > 10)'
 ```
 
 For scripts and integrations, `--format json` emits stable snake_case keys derived from column
 identifiers rather than display headers. `--format jsonl` emits one canonical process object per line.
 
 ```console
-procs --format json
-procs --format json --pretty
-procs --format json | jq '.[] | select(.usage_cpu > 10)'
-procs --format jsonl | jq 'select(.user == "root")'
+procsuf --format json
+procsuf --format json --pretty
+procsuf --format json | jq '.[] | select(.usage_cpu > 10)'
+procsuf --format jsonl | jq 'select(.user == "root")'
 ```
 
 JSONL is intended for streaming pipelines and cannot be combined with `--pretty` or watch mode.
@@ -274,10 +196,10 @@ Use `--where` to filter individual canonical process records without installing 
 The expression is compiled once and works with table, watch, JSON, and JSONL output.
 
 ```console
-procs --where '.usage_cpu > 10'
-procs --where '.user == "root" and .usage_mem > 1'
-procs --watch --where '.command | contains("server")'
-procs --format jsonl --where '.pid > 1000'
+procsuf --where '.usage_cpu > 10'
+procsuf --where '.user == "root" and .usage_mem > 1'
+procsuf --watch --where '.command | contains("server")'
+procsuf --format jsonl --where '.pid > 1000'
 ```
 
 `--where` currently exposes canonical fields for the configured columns. Missing fields follow jq semantics and evaluate as `null`.
@@ -286,10 +208,10 @@ Use `--jq` to transform the complete canonical JSON array. The transform runs on
 search and per-record `--where` filtering, and it implies canonical JSON output.
 
 ```console
-procs --jq 'map({pid, command})'
-procs --where '.usage_cpu > 10' --jq 'map(.pid)'
-procs --jq '{count: length, users: map(.user) | unique}'
-procs --jq '.[] | .pid'
+procsuf --jq 'map({pid, command})'
+procsuf --where '.usage_cpu > 10' --jq 'map(.pid)'
+procsuf --jq '{count: length, users: map(.user) | unique}'
+procsuf --jq '.[] | .pid'
 ```
 
 The filter's output follows jq stream conventions:
@@ -301,7 +223,7 @@ The filter's output follows jq stream conventions:
 Arrays, objects, strings, numbers, booleans, and `null` remain JSON values; strings are JSON-quoted
 rather than written as raw text. `--pretty` pretty-prints each output value. A multiple-value stream
 is intentionally not wrapped in an array, just like jq's normal output. If the query engine produces
-one of its non-JSON extension values, `procs` reports an error instead of writing invalid JSON.
+one of its non-JSON extension values, `procsuf` reports an error instead of writing invalid JSON.
 
 Because `--jq` owns the complete output stream, it cannot be combined with watch mode,
 `--format table`, `--format jsonl`, or the legacy display-keyed `--json` option. `--format json` is
@@ -312,7 +234,7 @@ the existing `--where` error behavior. Incompatible `--jq` output modes also exi
 
 ### Watch mode
 
-If `--watch` or `--watch-interval <second>` option is used, procs automatically updates output like `top`.
+If `--watch` or `--watch-interval <second>` option is used, procsuf automatically updates output like `top`.
 If `--watch` is used, the update interval becomes 1s.
 The update interval can be specified by the argument of `--watch-interval`.
 Long command values wrap beneath the `Command` column instead of being cut at the terminal edge. Wrapped rows consume additional screen lines, so a narrow terminal may show fewer processes. A configured `max_width` still limits that column before wrapping.
@@ -329,10 +251,10 @@ There are some keyboard shortcuts to control.
 If `--tree` option is used, processes are sorted by dependency order and dependency tree is shown at left side.
 
 ```console
-procs --tree
+procsuf --tree
 ```
 
-![procs_tree](https://user-images.githubusercontent.com/4331004/55446692-9ff07900-55fb-11e9-8b66-a8432df0a8e1.png)
+![procsuf_tree](https://user-images.githubusercontent.com/4331004/55446692-9ff07900-55fb-11e9-8b66-a8432df0a8e1.png)
 
 If `TreeSlot` column exists in config, dependency tree is shown at the slot.
 
@@ -350,10 +272,10 @@ The keyword is matched partially and case is ignored.
 The default sort is specified by `[sort]` section in the [configuration file](#configuration).
 
 ```console
-procs --sortd cpu
+procsuf --sortd cpu
 ```
 
-![procs_sort](https://user-images.githubusercontent.com/4331004/55446704-ab43a480-55fb-11e9-81dc-e3ac1a1e2507.png)
+![procsuf_sort](https://user-images.githubusercontent.com/4331004/55446704-ab43a480-55fb-11e9-81dc-e3ac1a1e2507.png)
 
 ### Insert column
 
@@ -381,7 +303,7 @@ The following shells are supported.
 You can source it directly on some shells.
 
 ```console
-source <(procs --gen-completion-out bash)
+source <(procsuf --gen-completion-out bash)
 ```
 
 ## Configuration
@@ -390,16 +312,26 @@ source <(procs --gen-completion-out bash)
 
 You can change configuration by writing a configuration file.
 There are some configuration examples in `config` directory of this repository.
-`config/large.toml` is the default configuration before procs v0.9.21.
+`config/large.toml` was the default configuration before upstream procs v0.9.21.
 
-The locations of the configuration file is OS-specific:
+The procsuf-specific configuration locations are OS-specific:
+
+ * Linux: `~/.config/procsuf/config.toml`, `/etc/procsuf/procsuf.toml`
+ * macOS: `~/Library/Preferences/com.github.ijnebzor.procsuf/config.toml`, `/etc/procsuf/procsuf.toml`
+ * Windows: `~/AppData/Roaming/ijnebzor/procsuf/config/config.toml`
+
+`~/.procsuf.toml` is also supported and takes precedence over the OS-specific locations. An explicit
+`--load-config` path takes precedence over every discovered path.
+
+To ease migration without overwriting or sharing fork state by default, procsuf checks the upstream
+procs locations only when no procsuf configuration exists at any supported location. The fallback
+locations are `~/.procs.toml` followed by the platform-specific upstream path:
 
  * Linux: `~/.config/procs/config.toml`, `/etc/procs/procs.toml`
  * macOS: `~/Library/Preferences/com.github.dalance.procs/config.toml`, `/etc/procs/procs.toml`
  * Windows: `~/AppData/Roaming/dalance/procs/config/config.toml`
 
-For compatibility, if `~/.procs.toml` exists, it will be preferred to
-the OS-specific locations.
+Creating any procsuf configuration stops this compatibility fallback.
 
 ### Specify a configuration from command line
 
@@ -498,7 +430,7 @@ The first `[[columns]]` is shown at left side, and the last is shown at right si
 
 #### `kind` list
 
-| procs `kind`         | `ps` STANDARD FORMAT  | Description                                   | Linux | macOS | Windows | FreeBSD |
+| procsuf `kind`       | `ps` STANDARD FORMAT  | Description                                   | Linux | macOS | Windows | FreeBSD |
 | -------------------- | --------------------- | --------------------------------------------- | ----- | ----- | ------- | ------- |
 | Arch                 | -not supported-       | Architecture of binary (macOS specific)       |       | o     |         |         |
 | Ccgroup              | -not supported-       | Control group by compressed format            | o     |       |         |         |
@@ -705,7 +637,7 @@ style = "223"     # 223 for both theme
 
 | Key                   | Value                 | Default          | Description                                                                  |
 | --------------------- | --------------------- | ---------------- | ---------------------------------------------------------------------------- |
-| show_self             | true, false           | false            | Whether the self process ( `procs` ) is shown                                |
+| show_self             | true, false           | false            | Whether the self process ( `procsuf` ) is shown                              |
 | show_self_parents     | true, false           | false            | Whether the parents which have self as the only child process are shown      |
 | show_thread           | true, false           | false            | Whether the thread information is shown ( Linux only )                       |
 | show_thread_in_tree   | true, false           | true             | Whether the thread information is shown in tree mode ( Linux only )          |

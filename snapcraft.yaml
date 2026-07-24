@@ -1,8 +1,8 @@
-name: procs
-version: &version v0.14.12
-summary: A modern replacement for ps written in Rust
+name: procsuf
+version: &version v0.1.0
+summary: procs unfucked.
 description: |
-  procs is a tool to display process information.
+  procsuf is a fork of procs that is finally unfucked.
 base: core18
 license: MIT
 
@@ -16,12 +16,12 @@ architectures:
   - build-on: armhf
 
 apps:
-  procs:
-    command: procs
+  procsuf:
+    command: procsuf
 
 parts:
-  procs:
-    source: https://github.com/dalance/procs.git
+  procsuf:
+    source: https://github.com/ijnebzor/procsuf.git
     source-tag: *version
     plugin: rust
     stage-packages:

@@ -59,14 +59,43 @@ fn command_with_kind_values() -> clap::Command {
         .mut_arg("only", |a| a.value_parser(parser))
 }
 
+fn select_config_path(
+    explicit: Option<PathBuf>,
+    procsuf_paths: impl IntoIterator<Item = Option<PathBuf>>,
+    procs_paths: impl IntoIterator<Item = Option<PathBuf>>,
+) -> Option<PathBuf> {
+    explicit
+        .or_else(|| procsuf_paths.into_iter().flatten().next())
+        .or_else(|| procs_paths.into_iter().flatten().next())
+}
+
 fn get_config(opt: &Opt) -> Result<Config, Error> {
-    let dot_cfg_path = directories::BaseDirs::new()
-        .map(|base| base.home_dir().join(".procs.toml"))
+    let procsuf_dot_cfg_path = directories::BaseDirs::new()
+        .map(|base| base.home_dir().join(".procsuf.toml"))
         .filter(|path| path.exists());
-    let app_cfg_path = directories::ProjectDirs::from("com.github", "dalance", "procs")
+    let procsuf_app_cfg_path = directories::ProjectDirs::from("com.github", "ijnebzor", "procsuf")
         .map(|proj| proj.preference_dir().join("config.toml"))
         .filter(|path| path.exists());
-    let xdg_cfg_path = directories::BaseDirs::new()
+    let procsuf_xdg_cfg_path = directories::BaseDirs::new()
+        .map(|base| {
+            base.home_dir()
+                .join(".config")
+                .join("procsuf")
+                .join("config.toml")
+        })
+        .filter(|path| path.exists());
+    let procsuf_etc_cfg_path = PathBuf::from("/etc/procsuf/procsuf.toml");
+    let procsuf_etc_cfg_path = procsuf_etc_cfg_path
+        .exists()
+        .then_some(procsuf_etc_cfg_path);
+
+    let procs_dot_cfg_path = directories::BaseDirs::new()
+        .map(|base| base.home_dir().join(".procs.toml"))
+        .filter(|path| path.exists());
+    let procs_app_cfg_path = directories::ProjectDirs::from("com.github", "dalance", "procs")
+        .map(|proj| proj.preference_dir().join("config.toml"))
+        .filter(|path| path.exists());
+    let procs_xdg_cfg_path = directories::BaseDirs::new()
         .map(|base| {
             base.home_dir()
                 .join(".config")
@@ -74,15 +103,23 @@ fn get_config(opt: &Opt) -> Result<Config, Error> {
                 .join("config.toml")
         })
         .filter(|path| path.exists());
-    let etc_path = PathBuf::from("/etc/procs/procs.toml");
-    let etc_cfg_path = etc_path.exists().then_some(etc_path);
-    let cfg_path = opt
-        .load_config
-        .clone()
-        .or(dot_cfg_path)
-        .or(app_cfg_path)
-        .or(xdg_cfg_path)
-        .or(etc_cfg_path);
+    let procs_etc_cfg_path = PathBuf::from("/etc/procs/procs.toml");
+    let procs_etc_cfg_path = procs_etc_cfg_path.exists().then_some(procs_etc_cfg_path);
+    let cfg_path = select_config_path(
+        opt.load_config.clone(),
+        [
+            procsuf_dot_cfg_path,
+            procsuf_app_cfg_path,
+            procsuf_xdg_cfg_path,
+            procsuf_etc_cfg_path,
+        ],
+        [
+            procs_dot_cfg_path,
+            procs_app_cfg_path,
+            procs_xdg_cfg_path,
+            procs_etc_cfg_path,
+        ],
+    );
 
     let config: Config = if let Some(path) = cfg_path {
         let mut f = fs::File::open(&path).context(format!("failed to open file ({path:?})"))?;
@@ -108,7 +145,7 @@ fn check_old_config(s: &str, config: Result<Config, toml::de::Error>) -> Result<
         Err(x) => {
             if s.contains("Color256") {
                 let err: Error = x.into();
-                let err = err.context("\"Color256\" keyword for 8bit color is obsolete. Please see https://github.com/dalance/procs#color-list");
+                let err = err.context("\"Color256\" keyword for 8bit color is obsolete. Please see https://github.com/ijnebzor/procsuf#color-list");
                 Err(err)
             } else {
                 Err(x.into())
@@ -157,7 +194,7 @@ fn run() -> Result<(), Error> {
         clap_complete::generate(
             shell,
             &mut command_with_kind_values(),
-            "procs",
+            "procsuf",
             &mut stdout(),
         );
         Ok(())
@@ -313,12 +350,44 @@ mod tests {
     use super::*;
 
     #[test]
+    fn procsuf_config_takes_precedence_over_upstream_config() {
+        let procsuf = PathBuf::from("procsuf/config.toml");
+        let procs = PathBuf::from("procs/config.toml");
+
+        let selected = select_config_path(None, [None, Some(procsuf.clone())], [Some(procs)]);
+
+        assert_eq!(selected, Some(procsuf));
+    }
+
+    #[test]
+    fn upstream_config_is_used_only_without_a_procsuf_config() {
+        let procs = PathBuf::from("procs/config.toml");
+
+        let selected = select_config_path(None, [None, None], [None, Some(procs.clone())]);
+
+        assert_eq!(selected, Some(procs));
+    }
+
+    #[test]
+    fn explicit_config_takes_precedence_over_discovered_configs() {
+        let explicit = PathBuf::from("custom/config.toml");
+
+        let selected = select_config_path(
+            Some(explicit.clone()),
+            [Some(PathBuf::from("procsuf/config.toml"))],
+            [Some(PathBuf::from("procs/config.toml"))],
+        );
+
+        assert_eq!(selected, Some(explicit));
+    }
+
+    #[test]
     fn test_run() {
         let mut config: Config = toml::from_str(CONFIG_DEFAULT).unwrap();
         config.pager.mode = ConfigPagerMode::Disable;
         config.display.theme = ConfigTheme::Dark;
 
-        let args = ["procs"];
+        let args = ["procsuf"];
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
@@ -330,39 +399,39 @@ mod tests {
         config.pager.mode = ConfigPagerMode::Disable;
         config.display.theme = ConfigTheme::Dark;
 
-        let args = ["procs", "root"];
+        let args = ["procsuf", "root"];
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
 
-        let args = ["procs", "1"];
+        let args = ["procsuf", "1"];
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
 
-        let args = ["procs", "--or", "root", "1"];
+        let args = ["procsuf", "--or", "root", "1"];
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
 
-        let args = ["procs", "--and", "root", "1"];
+        let args = ["procsuf", "--and", "root", "1"];
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
 
-        let args = ["procs", "--nor", "root", "1"];
+        let args = ["procsuf", "--nor", "root", "1"];
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
 
-        let args = ["procs", "--nand", "root", "1"];
+        let args = ["procsuf", "--nand", "root", "1"];
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
 
         config.search.nonnumeric_search = ConfigSearchKind::Exact;
         config.search.numeric_search = ConfigSearchKind::Partial;
-        let args = ["procs", "root", "1"];
+        let args = ["procsuf", "root", "1"];
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
@@ -380,7 +449,7 @@ mod tests {
         config.display.cut_to_terminal = false;
         config.display.theme = ConfigTheme::Dark;
 
-        let args = ["procs"];
+        let args = ["procsuf"];
         let mut opt = Opt::parse_from(args.iter());
         config.pager.mode = ConfigPagerMode::Disable;
         let ret = run_default(&mut opt, &config);
@@ -393,7 +462,7 @@ mod tests {
         config.pager.mode = ConfigPagerMode::Disable;
         config.display.theme = ConfigTheme::Dark;
 
-        let args = ["procs", "--insert", "ppid"];
+        let args = ["procsuf", "--insert", "ppid"];
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
@@ -405,12 +474,12 @@ mod tests {
         config.pager.mode = ConfigPagerMode::Disable;
         config.display.theme = ConfigTheme::Dark;
 
-        let args = ["procs", "--sorta", "cpu"];
+        let args = ["procsuf", "--sorta", "cpu"];
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
 
-        let args = ["procs", "--sortd", "cpu"];
+        let args = ["procsuf", "--sortd", "cpu"];
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
@@ -422,7 +491,7 @@ mod tests {
         config.pager.mode = ConfigPagerMode::Disable;
         config.display.theme = ConfigTheme::Dark;
 
-        let args = ["procs", "--tree"];
+        let args = ["procsuf", "--tree"];
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
@@ -437,7 +506,7 @@ mod tests {
         let _tcp = std::net::TcpListener::bind("127.0.0.1:10000");
         let _udp = std::net::UdpSocket::bind("127.0.0.1:10000");
 
-        let args = ["procs"];
+        let args = ["procsuf"];
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
@@ -449,7 +518,7 @@ mod tests {
         config.pager.mode = ConfigPagerMode::Disable;
         config.display.theme = ConfigTheme::Dark;
 
-        let args = ["procs", "--use-config", "large"];
+        let args = ["procsuf", "--use-config", "large"];
         let mut opt = Opt::parse_from(args.iter());
         let ret = run_default(&mut opt, &config);
         assert!(ret.is_ok());
@@ -457,29 +526,29 @@ mod tests {
 
     #[test]
     fn test_validate_output_args() {
-        let opt = Opt::parse_from(["procs", "--json", "--pretty"]);
+        let opt = Opt::parse_from(["procsuf", "--json", "--pretty"]);
         assert!(validate_output_args(&opt).is_ok());
 
-        let opt = Opt::parse_from(["procs", "--format", "json", "--pretty"]);
+        let opt = Opt::parse_from(["procsuf", "--format", "json", "--pretty"]);
         assert!(validate_output_args(&opt).is_ok());
 
-        let opt = Opt::parse_from(["procs", "--pretty"]);
+        let opt = Opt::parse_from(["procsuf", "--pretty"]);
         assert!(validate_output_args(&opt).is_err());
 
-        let opt = Opt::parse_from(["procs", "--format", "jsonl", "--pretty"]);
+        let opt = Opt::parse_from(["procsuf", "--format", "jsonl", "--pretty"]);
         assert!(validate_output_args(&opt).is_err());
 
-        let mut opt = Opt::parse_from(["procs", "--format", "jsonl", "--watch"]);
+        let mut opt = Opt::parse_from(["procsuf", "--format", "jsonl", "--watch"]);
         opt.watch_mode = true;
         assert!(validate_output_args(&opt).is_err());
 
-        let opt = Opt::parse_from(["procs", "--jq", ".", "--pretty"]);
+        let opt = Opt::parse_from(["procsuf", "--jq", ".", "--pretty"]);
         assert!(validate_output_args(&opt).is_ok());
 
-        let opt = Opt::parse_from(["procs", "--jq", ".", "--format", "json"]);
+        let opt = Opt::parse_from(["procsuf", "--jq", ".", "--format", "json"]);
         assert!(validate_output_args(&opt).is_ok());
 
-        let mut opt = Opt::parse_from(["procs", "--jq", ".", "--watch"]);
+        let mut opt = Opt::parse_from(["procsuf", "--jq", ".", "--watch"]);
         opt.watch_mode = true;
         assert_eq!(
             validate_output_args(&opt).unwrap_err().to_string(),
@@ -487,21 +556,21 @@ mod tests {
         );
 
         for args in [
-            ["procs", "--jq", ".", "--format", "jsonl"],
-            ["procs", "--jq", ".", "--format", "table"],
+            ["procsuf", "--jq", ".", "--format", "jsonl"],
+            ["procsuf", "--jq", ".", "--format", "table"],
         ] {
             assert!(validate_output_args(&Opt::parse_from(args)).is_err());
         }
 
-        let opt = Opt::parse_from(["procs", "--jq", ".", "--json"]);
+        let opt = Opt::parse_from(["procsuf", "--jq", ".", "--json"]);
         assert!(validate_output_args(&opt).is_err());
 
-        let opt = Opt::parse_from(["procs", "--jq", ".", "--list"]);
+        let opt = Opt::parse_from(["procsuf", "--jq", ".", "--list"]);
         assert!(validate_output_args(&opt).is_err());
     }
 
     #[test]
     fn test_legacy_json_conflicts_with_canonical_format() {
-        assert!(Opt::try_parse_from(["procs", "--json", "--format", "json"]).is_err());
+        assert!(Opt::try_parse_from(["procsuf", "--json", "--format", "json"]).is_err());
     }
 }

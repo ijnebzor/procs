@@ -37,7 +37,7 @@ mod tests {
         let regex = SearchRegex::new("proc.*", false).unwrap();
 
         assert!(matches!(regex, SearchRegex::Fast(_)));
-        assert!(regex.is_match("procs").unwrap());
+        assert!(regex.is_match("procsuf").unwrap());
     }
 
     #[test]
@@ -45,7 +45,7 @@ mod tests {
         let regex = SearchRegex::new("proc(?=s)", false).unwrap();
 
         assert!(matches!(regex, SearchRegex::Fancy(_)));
-        assert!(regex.is_match("procs").unwrap());
+        assert!(regex.is_match("procsuf").unwrap());
         assert!(!regex.is_match("procx").unwrap());
     }
 
@@ -54,7 +54,7 @@ mod tests {
         let regex = SearchRegex::new("proc(?!x)", false).unwrap();
 
         assert!(matches!(regex, SearchRegex::Fancy(_)));
-        assert!(regex.is_match("procs").unwrap());
+        assert!(regex.is_match("procsuf").unwrap());
         assert!(!regex.is_match("procx").unwrap());
     }
 }

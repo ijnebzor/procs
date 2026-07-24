@@ -1,6 +1,12 @@
 # Change Log
 
-## [Unreleased](https://github.com/dalance/procs/compare/v0.14.12...Unreleased) - ReleaseDate
+## [Unreleased](https://github.com/ijnebzor/procsuf/compare/v0.1.0...HEAD) - ReleaseDate
+
+* [Changed] Rebrand the fork, package, executable, and artifacts from procs to procsuf
+* [Changed] Isolate procsuf configuration while falling back to upstream procs configuration when no procsuf configuration exists
+
+The entries below preserve the release history of the upstream
+[`procs`](https://github.com/dalance/procs) project and intentionally retain their original links.
 
 ## [v0.14.12](https://github.com/dalance/procs/compare/v0.14.11...v0.14.12) - 2026-06-25
 

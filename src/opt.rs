@@ -43,6 +43,7 @@ pub enum BuiltinConfig {
 }
 
 #[derive(Debug, Parser)]
+#[clap(name = "procsuf")]
 #[clap(long_version(option_env!("LONG_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))))]
 #[clap(
     styles(Styles::styled()
@@ -52,9 +53,9 @@ pub enum BuiltinConfig {
         .placeholder(AnsiColor::Cyan.on_default())
     )
 )]
-/// A modern replacement for ps
+/// procs unfucked.
 ///
-/// please see https://github.com/dalance/procs#configuration to configure columns
+/// Please see https://github.com/ijnebzor/procsuf#configuration to configure columns.
 pub struct Opt {
     /// Keywords for search
     #[clap(action, name = "KEYWORD")]
@@ -230,13 +231,13 @@ pub fn gen_completion<P: AsRef<Path>>(
     cmd: &mut clap::Command,
 ) -> Result<(), Error> {
     let path_str = path.as_ref().as_os_str();
-    clap_complete::generate_to(shell, cmd, "procs", path_str)?;
+    clap_complete::generate_to(shell, cmd, "procsuf", path_str)?;
     let filename = match shell {
-        Shell::Bash => "procs.bash",
-        Shell::Elvish => "procs.elv",
-        Shell::Fish => "procs.fish",
-        Shell::PowerShell => "_procs.ps1",
-        Shell::Zsh => "_procs",
+        Shell::Bash => "procsuf.bash",
+        Shell::Elvish => "procsuf.elv",
+        Shell::Fish => "procsuf.fish",
+        Shell::PowerShell => "_procsuf.ps1",
+        Shell::Zsh => "_procsuf",
         x => return Err(anyhow!("unknown shell type: {}", x)),
     };
     let path = path.as_ref().join(filename);

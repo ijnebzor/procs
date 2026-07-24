@@ -21,10 +21,10 @@ fn main() {
         let man = clap_mangen::Man::new(cmd);
         let mut buf = Vec::new();
         man.render(&mut buf).unwrap();
-        std::fs::write(out_dir.join("procs.1"), buf).unwrap();
+        std::fs::write(out_dir.join("procsuf.1"), buf).unwrap();
         println!(
             "man page is generated: {}",
-            out_dir.join("procs.1").display()
+            out_dir.join("procsuf.1").display()
         );
     }
 }

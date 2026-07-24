@@ -1,13 +1,13 @@
 [package]
-name = "procs"
-version = "0.14.12"
+name = "procsuf"
+version = "0.1.0"
 authors = ["dalance@gmail.com"]
-repository = "https://github.com/dalance/procs"
+repository = "https://github.com/ijnebzor/procsuf"
 keywords = ["process"]
 categories = ["command-line-utilities"]
 license = "MIT"
 readme = "README.md"
-description = "A modern replacement for ps"
+description = "A fork of procs that is finally unfucked."
 edition = "2024"
 exclude = ["img/*", "config/*"]
 rust-version = "1.88"
@@ -19,9 +19,8 @@ tag-prefix                 = ""
 pre-release-replacements = [
     {file="CHANGELOG.md", search="Unreleased", replace="v{{version}}"},
     {file="CHANGELOG.md", search="ReleaseDate", replace="{{date}}"},
-    {file="CHANGELOG.md", search="Change Log", replace="Change Log\n\n## [Unreleased](https://github.com/dalance/procs/compare/v{{version}}...Unreleased) - ReleaseDate"},
+    {file="CHANGELOG.md", search="Change Log", replace="Change Log\n\n## [Unreleased](https://github.com/ijnebzor/procsuf/compare/v{{version}}...HEAD) - ReleaseDate"},
     {file="README.md", search = "changelog-v[0-9\\.]+", replace = "changelog-v{{version}}" },
-    {file="README.md", search = "v[0-9\\.]+/procs-[0-9\\.]+", replace = "v{{version}}/procs-{{version}}" },
     {file="snapcraft.yaml", search="version v[0-9\\.]+", replace="version v{{version}}"},
 ]
 
@@ -30,8 +29,8 @@ default = ["docker"]
 docker = ["dockworker", "tokio"]
 
 [badges]
-travis-ci = { repository = "dalance/procs" }
-codecov   = { repository = "dalance/procs", branch = "master", service = "github" }
+travis-ci = { repository = "ijnebzor/procsuf" }
+codecov   = { repository = "ijnebzor/procsuf", branch = "master", service = "github" }
 
 [dependencies]
 anyhow        = "1.0"
@@ -95,7 +94,7 @@ buildflags = ["--release"]
 target = "x86_64-unknown-linux-musl"
 
 [package.metadata.rpm.targets]
-procs = { path = "/usr/bin/procs" }
+procsuf = { path = "/usr/bin/procsuf" }
 
 [profile.release]
 lto = true

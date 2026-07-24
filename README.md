@@ -268,9 +268,9 @@ procs --format jsonl | jq 'select(.user == "root")'
 
 JSONL is intended for streaming pipelines and cannot be combined with `--pretty` or watch mode.
 
-### jq-compatible filtering
+### jq-compatible queries
 
-Use `--where` to filter canonical process records without installing or launching external `jq`.
+Use `--where` to filter individual canonical process records without installing or launching external `jq`.
 The expression is compiled once and works with table, watch, JSON, and JSONL output.
 
 ```console
@@ -281,6 +281,34 @@ procs --format jsonl --where '.pid > 1000'
 ```
 
 `--where` currently exposes canonical fields for the configured columns. Missing fields follow jq semantics and evaluate as `null`.
+
+Use `--jq` to transform the complete canonical JSON array. The transform runs once after keyword
+search and per-record `--where` filtering, and it implies canonical JSON output.
+
+```console
+procs --jq 'map({pid, command})'
+procs --where '.usage_cpu > 10' --jq 'map(.pid)'
+procs --jq '{count: length, users: map(.user) | unique}'
+procs --jq '.[] | .pid'
+```
+
+The filter's output follows jq stream conventions:
+
+- zero outputs (for example, `--jq 'empty'`) write nothing;
+- one output writes one JSON value; and
+- multiple outputs write each complete JSON value in evaluation order, separated by newlines.
+
+Arrays, objects, strings, numbers, booleans, and `null` remain JSON values; strings are JSON-quoted
+rather than written as raw text. `--pretty` pretty-prints each output value. A multiple-value stream
+is intentionally not wrapped in an array, just like jq's normal output. If the query engine produces
+one of its non-JSON extension values, `procs` reports an error instead of writing invalid JSON.
+
+Because `--jq` owns the complete output stream, it cannot be combined with watch mode,
+`--format table`, `--format jsonl`, or the legacy display-keyed `--json` option. `--format json` is
+allowed but unnecessary. Use `--where` instead when JSONL or watch mode is required.
+
+Invalid query syntax and query runtime failures print a diagnostic and exit with status 1, matching
+the existing `--where` error behavior. Incompatible `--jq` output modes also exit with status 1.
 
 ### Watch mode
 

@@ -4,7 +4,7 @@ use crate::columns::*;
 use crate::config::*;
 use crate::opt::{ArgColorMode, ArgOutputFormat, ArgPagerMode};
 use crate::process::collect_proc;
-use crate::query::WhereFilter;
+use crate::query::{JqTransform, WhereFilter};
 use crate::search_regex::SearchRegex;
 use crate::style::{apply_color, apply_style, color_to_column_style};
 use crate::term_info::TermInfo;
@@ -491,6 +491,19 @@ impl View {
             command.max_width,
         );
         (command_width > 0).then_some((command_idx, command_width))
+    }
+
+    /// Transform the complete canonical JSON array and write each jq output as
+    /// a separate JSON value, matching jq's output-stream convention.
+    pub fn display_jq(&mut self, transform: &JqTransform, pretty: bool) -> Result<(), Error> {
+        self.term_info.use_pager = false;
+        let input = serde_json::Value::Array(self.json_rows(true));
+
+        for output in transform.transform(&input, pretty)? {
+            self.term_info.write_line(&output)?;
+        }
+
+        Ok(())
     }
 
     pub fn display(

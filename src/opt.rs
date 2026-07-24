@@ -55,7 +55,7 @@ pub enum BuiltinConfig {
 )]
 /// procs unfucked.
 ///
-/// Please see https://github.com/ijnebzor/procsuf#configuration to configure columns.
+/// Please see <https://github.com/ijnebzor/procsuf#configuration> to configure columns.
 pub struct Opt {
     /// Keywords for search
     #[clap(action, name = "KEYWORD")]
